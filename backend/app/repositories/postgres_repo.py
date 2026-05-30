@@ -22,6 +22,7 @@ class PostgresRepository(BaseRepository):
             rows = self.db.execute(text(sql), params).mappings().all()
             return [dict(r) for r in rows]
         except (ProgrammingError, OperationalError):
+            self.db.rollback()
             return []
 
     @staticmethod
@@ -34,7 +35,7 @@ class PostgresRepository(BaseRepository):
             raise ValueError("usina_nao_encontrada")
 
     def list_usinas(self, fonte: str | None = None, submercado: str | None = None):
-        sql = """
+        sql_gold = """
         SELECT usina_id, nome, fonte, potencia_mw, submercado, latitude, longitude, garantia_fisica_mwm
         FROM gold.usinas
         WHERE (:fonte IS NULL OR fonte = :fonte)
@@ -42,31 +43,143 @@ class PostgresRepository(BaseRepository):
           AND (:ne_only = false OR submercado = 'NE')
         ORDER BY nome
         """
-        rows = self.db.execute(
-            text(sql),
-            {
-                "fonte": fonte,
-                "submercado": submercado,
-                "ne_only": self.mvp_only_nordeste,
-            },
-        ).mappings().all()
-        return [dict(r) for r in rows]
+        try:
+            rows = self.db.execute(
+                text(sql_gold),
+                {
+                    "fonte": fonte,
+                    "submercado": submercado,
+                    "ne_only": self.mvp_only_nordeste,
+                },
+            ).mappings().all()
+            return [dict(r) for r in rows]
+        except (ProgrammingError, OperationalError):
+            self.db.rollback()
+            sql_public = """
+            WITH base AS (
+                SELECT
+                    id_ons AS usina_id,
+                    nom_usina AS nome,
+                    COALESCE(nom_tipocombustivel, 'desconhecida') AS fonte,
+                    COALESCE(val_potenciainstalada, 0) AS potencia_mw,
+                    CASE
+                        WHEN UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') THEN 'NE'
+                        WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
+                        WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'
+                        ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
+                    END AS submercado,
+                    NULL::double precision AS latitude,
+                    NULL::double precision AS longitude,
+                    NULL::double precision AS garantia_fisica_mwm,
+                    din_instante AS ref_ts
+                FROM public.disponibilidade_usina
+                WHERE id_ons IS NOT NULL
+
+                UNION ALL
+
+                SELECT
+                    id_ons AS usina_id,
+                    nom_usina_conjunto AS nome,
+                    COALESCE(nom_tipousina, 'desconhecida') AS fonte,
+                    COALESCE(val_capacidadeinstalada, 0) AS potencia_mw,
+                    CASE
+                        WHEN UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') THEN 'NE'
+                        WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
+                        WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'
+                        ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
+                    END AS submercado,
+                    val_latitudesecoletora AS latitude,
+                    val_longitudesecoletora AS longitude,
+                    NULL::double precision AS garantia_fisica_mwm,
+                    din_instante AS ref_ts
+                FROM public.fator_capacidade_2
+                WHERE id_ons IS NOT NULL
+            ), ranked AS (
+                SELECT *,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY usina_id
+                           ORDER BY ref_ts DESC NULLS LAST
+                       ) AS rn
+                FROM base
+                WHERE (:ne_only = false OR submercado = 'NE')
+            )
+            SELECT usina_id, nome, fonte, potencia_mw, submercado, latitude, longitude, garantia_fisica_mwm
+            FROM ranked
+            WHERE rn = 1
+            ORDER BY nome
+            """
+            rows = self.db.execute(text(sql_public), {"ne_only": self.mvp_only_nordeste}).mappings().all()
+            data = [dict(r) for r in rows]
+            if fonte:
+                data = [u for u in data if u.get("fonte") == fonte]
+            if submercado:
+                data = [u for u in data if u.get("submercado") == submercado]
+            return data
 
     def get_usina(self, usina_id: str):
-        sql = """
+        sql_gold = """
         SELECT usina_id, nome, fonte, potencia_mw, submercado, latitude, longitude, garantia_fisica_mwm
         FROM gold.usinas
         WHERE usina_id = :usina_id
           AND (:ne_only = false OR submercado = 'NE')
         LIMIT 1
         """
-        row = self.db.execute(text(sql), {"usina_id": usina_id, "ne_only": self.mvp_only_nordeste}).mappings().first()
-        return dict(row) if row else None
+        try:
+            row = self.db.execute(text(sql_gold), {"usina_id": usina_id, "ne_only": self.mvp_only_nordeste}).mappings().first()
+            return dict(row) if row else None
+        except (ProgrammingError, OperationalError):
+            self.db.rollback()
+            sql_public = """
+            SELECT
+                id_ons AS usina_id,
+                nom_usina AS nome,
+                COALESCE(nom_tipocombustivel, 'desconhecida') AS fonte,
+                COALESCE(val_potenciainstalada, 0) AS potencia_mw,
+                CASE
+                    WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
+                    WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'
+                    ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
+                END AS submercado,
+                NULL::double precision AS latitude,
+                NULL::double precision AS longitude,
+                NULL::double precision AS garantia_fisica_mwm
+            FROM public.disponibilidade_usina
+            WHERE id_ons = :usina_id
+              AND (:ne_only = false OR UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') OR UPPER(nom_subsistema) = 'NORDESTE')
+            ORDER BY din_instante DESC
+            LIMIT 1
+            """
+            row = self.db.execute(text(sql_public), {"usina_id": usina_id, "ne_only": self.mvp_only_nordeste}).mappings().first()
+            if row:
+                return dict(row)
+
+            sql_public_fc = """
+            SELECT
+                id_ons AS usina_id,
+                nom_usina_conjunto AS nome,
+                COALESCE(nom_tipousina, 'desconhecida') AS fonte,
+                COALESCE(val_capacidadeinstalada, 0) AS potencia_mw,
+                CASE
+                    WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
+                    WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'
+                    ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
+                END AS submercado,
+                val_latitudesecoletora AS latitude,
+                val_longitudesecoletora AS longitude,
+                NULL::double precision AS garantia_fisica_mwm
+            FROM public.fator_capacidade_2
+            WHERE id_ons = :usina_id
+              AND (:ne_only = false OR UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') OR UPPER(nom_subsistema) = 'NORDESTE')
+            ORDER BY din_instante DESC
+            LIMIT 1
+            """
+            row_fc = self.db.execute(text(sql_public_fc), {"usina_id": usina_id, "ne_only": self.mvp_only_nordeste}).mappings().first()
+            return dict(row_fc) if row_fc else None
 
     def get_constrained_off(self, usina_id: str, inicio: datetime, fim: datetime):
         self._validate_range(inicio, fim)
         self._assert_usina_exists(usina_id)
-        sql = """
+        sql_gold = """
         SELECT
             usina_id,
             timestamp,
@@ -82,11 +195,40 @@ class PostgresRepository(BaseRepository):
           AND (:ne_only = false OR submercado = 'NE')
         ORDER BY timestamp
         """
-        rows = self.db.execute(
-            text(sql),
-            {"usina_id": usina_id, "inicio": inicio, "fim": fim, "ne_only": self.mvp_only_nordeste},
-        ).mappings().all()
-        return [dict(r) for r in rows]
+        try:
+            rows = self.db.execute(
+                text(sql_gold),
+                {"usina_id": usina_id, "inicio": inicio, "fim": fim, "ne_only": self.mvp_only_nordeste},
+            ).mappings().all()
+            return [dict(r) for r in rows]
+        except (ProgrammingError, OperationalError):
+            self.db.rollback()
+            sql_public = """
+            SELECT
+                id_ons AS usina_id,
+                din_instante AS timestamp,
+                nom_tipousina AS fonte,
+                val_geracaoverificada AS geracao_verificada_mwh,
+                val_geracaoprogramada AS geracao_referencia_mwh,
+                GREATEST(COALESCE(val_geracaoprogramada,0) - COALESCE(val_geracaoverificada,0), 0) AS energia_restringida_mwh,
+                NULL::text AS razao_restricao,
+                CASE
+                    WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
+                    WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'
+                    ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
+                END AS submercado
+            FROM public.fator_capacidade_2
+            WHERE id_ons = :usina_id
+              AND din_instante BETWEEN :inicio AND :fim
+              AND (:ne_only = false OR UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') OR UPPER(nom_subsistema) = 'NORDESTE')
+              AND COALESCE(val_geracaoprogramada,0) > COALESCE(val_geracaoverificada,0)
+            ORDER BY din_instante
+            """
+            rows = self.db.execute(
+                text(sql_public),
+                {"usina_id": usina_id, "inicio": inicio, "fim": fim, "ne_only": self.mvp_only_nordeste},
+            ).mappings().all()
+            return [dict(r) for r in rows]
 
     def get_pld(self, submercado: str, inicio: datetime, fim: datetime):
         self._validate_range(inicio, fim)
@@ -97,24 +239,43 @@ class PostgresRepository(BaseRepository):
           AND timestamp BETWEEN :inicio AND :fim
         ORDER BY timestamp
         """
-        rows = self.db.execute(
-            text(sql),
+        return self._safe_mappings_query(
+            sql,
             {"submercado": submercado, "inicio": inicio, "fim": fim},
-        ).mappings().all()
-        return [dict(r) for r in rows]
+        )
 
     def get_geracao_horaria(self, usina_id: str, inicio: datetime, fim: datetime):
         self._validate_range(inicio, fim)
         self._assert_usina_exists(usina_id)
-        sql = """
+        sql_gold = """
         SELECT usina_id, timestamp, geracao_mwh, fator_capacidade
         FROM gold.geracao_horaria
         WHERE usina_id = :usina_id
           AND timestamp BETWEEN :inicio AND :fim
         ORDER BY timestamp
         """
-        rows = self.db.execute(text(sql), {"usina_id": usina_id, "inicio": inicio, "fim": fim}).mappings().all()
-        return [dict(r) for r in rows]
+        try:
+            rows = self.db.execute(text(sql_gold), {"usina_id": usina_id, "inicio": inicio, "fim": fim}).mappings().all()
+            return [dict(r) for r in rows]
+        except (ProgrammingError, OperationalError):
+            self.db.rollback()
+            sql_public = """
+            SELECT
+                id_ons AS usina_id,
+                din_instante AS timestamp,
+                val_geracaoverificada AS geracao_mwh,
+                COALESCE(val_fatorcapacidade, 0) AS fator_capacidade
+            FROM public.fator_capacidade_2
+            WHERE id_ons = :usina_id
+              AND din_instante BETWEEN :inicio AND :fim
+              AND (:ne_only = false OR UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') OR UPPER(nom_subsistema) = 'NORDESTE')
+            ORDER BY din_instante
+            """
+            rows = self.db.execute(
+                text(sql_public),
+                {"usina_id": usina_id, "inicio": inicio, "fim": fim, "ne_only": self.mvp_only_nordeste},
+            ).mappings().all()
+            return [dict(r) for r in rows]
 
     def get_clima_horario(self, usina_id: str, inicio: datetime, fim: datetime, is_forecast: bool | None = None):
         self._validate_range(inicio, fim)
@@ -127,40 +288,77 @@ class PostgresRepository(BaseRepository):
           AND (:is_forecast IS NULL OR is_forecast = :is_forecast)
         ORDER BY timestamp
         """
-        rows = self.db.execute(
-            text(sql),
+        return self._safe_mappings_query(
+            sql,
             {
                 "usina_id": usina_id,
                 "inicio": inicio,
                 "fim": fim,
                 "is_forecast": is_forecast,
             },
-        ).mappings().all()
-        return [dict(r) for r in rows]
+        )
 
     def get_disponibilidade_usina(self, usina_id: str, inicio: datetime, fim: datetime):
         self._validate_range(inicio, fim)
         self._assert_usina_exists(usina_id)
-        sql = """
+        sql_gold = """
         SELECT usina_id, timestamp, disponibilidade, teifa, teip
         FROM gold.disponibilidade_usina
         WHERE usina_id = :usina_id
           AND timestamp BETWEEN :inicio AND :fim
         ORDER BY timestamp
         """
-        return self._safe_mappings_query(sql, {"usina_id": usina_id, "inicio": inicio, "fim": fim})
+        rows = self._safe_mappings_query(sql_gold, {"usina_id": usina_id, "inicio": inicio, "fim": fim})
+        if rows:
+            return rows
+
+        sql_public = """
+        SELECT
+            id_ons AS usina_id,
+            din_instante AS timestamp,
+            COALESCE(val_dispoperacional, 0) AS disponibilidade,
+            0::double precision AS teifa,
+            0::double precision AS teip
+        FROM public.disponibilidade_usina
+        WHERE id_ons = :usina_id
+          AND din_instante BETWEEN :inicio AND :fim
+          AND (:ne_only = false OR UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') OR UPPER(nom_subsistema) = 'NORDESTE')
+        ORDER BY din_instante
+        """
+        return self._safe_mappings_query(
+            sql_public,
+            {"usina_id": usina_id, "inicio": inicio, "fim": fim, "ne_only": self.mvp_only_nordeste},
+        )
 
     def get_despacho_dessem(self, usina_id: str, inicio: datetime, fim: datetime):
         self._validate_range(inicio, fim)
         self._assert_usina_exists(usina_id)
-        sql = """
+        sql_gold = """
         SELECT usina_id, timestamp, geracao_programada_mwh
         FROM gold.despacho_dessem
         WHERE usina_id = :usina_id
           AND timestamp BETWEEN :inicio AND :fim
         ORDER BY timestamp
         """
-        return self._safe_mappings_query(sql, {"usina_id": usina_id, "inicio": inicio, "fim": fim})
+        rows = self._safe_mappings_query(sql_gold, {"usina_id": usina_id, "inicio": inicio, "fim": fim})
+        if rows:
+            return rows
+
+        sql_public = """
+        SELECT
+            id_ons AS usina_id,
+            din_instante AS timestamp,
+            COALESCE(val_geracaoprogramada, 0) AS geracao_programada_mwh
+        FROM public.fator_capacidade_2
+        WHERE id_ons = :usina_id
+          AND din_instante BETWEEN :inicio AND :fim
+          AND (:ne_only = false OR UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') OR UPPER(nom_subsistema) = 'NORDESTE')
+        ORDER BY din_instante
+        """
+        return self._safe_mappings_query(
+            sql_public,
+            {"usina_id": usina_id, "inicio": inicio, "fim": fim, "ne_only": self.mvp_only_nordeste},
+        )
 
     def get_garantia_fisica(self, usina_id: str, inicio: datetime, fim: datetime):
         self._validate_range(inicio, fim)

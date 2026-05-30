@@ -41,6 +41,7 @@ class TestRegulatorioService(unittest.TestCase):
         self.assertIn("qualidade_dados", out)
         self.assertIn("metadata", out)
         self.assertEqual(out["metadata"]["mvp_scope"], "geradoras_renovaveis_submercado_ne")
+        self.assertEqual(out["metadata"]["api_contract_version"], "v1")
         self.assertIn("status", out["qualidade_dados"])
 
     def test_classificador_so_em_caso_ambiguo(self):

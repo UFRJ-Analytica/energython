@@ -16,11 +16,17 @@ def perda_financeira(
     usina_id: str,
     inicio: str,
     fim: str,
+    limit: int = Query(default=200, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
     service=Depends(get_financeiro_service),
 ):
     try:
         i, f = parse_range(inicio, fim)
-        return service.calcular_perda(usina_id, i, f)
+        out = service.calcular_perda(usina_id, i, f)
+        total = len(out["serie"])
+        out["paginacao_serie"] = {"total_count": total, "limit": limit, "offset": offset}
+        out["serie"] = out["serie"][offset : offset + limit]
+        return out
     except DateRangeError as exc:
         raise api_error(422, "parametro_data_invalido", str(exc))
     except ValueError:

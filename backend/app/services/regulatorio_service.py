@@ -131,6 +131,7 @@ class RegulatorioService:
             "metadata": {
                 "mvp_scope_applied": True,
                 "mvp_scope": "geradoras_renovaveis_submercado_ne",
+                "api_contract_version": "v1",
                 "data_quality_status": qualidade_status,
             },
             "eventos": itens,

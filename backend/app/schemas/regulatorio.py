@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.schemas.common import MetaOut
+from app.schemas.common import MetaOut, PaginationOut
 
 
 class ElegibilidadeEventoOut(BaseModel):
@@ -34,6 +34,7 @@ class ElegibilidadeOut(BaseModel):
     qualidade_classificacao: QualidadeClassificacaoOut
     qualidade_dados: QualidadeDadosRegulatorioOut
     metadata: MetaOut
+    paginacao_eventos: PaginationOut
     eventos: list[ElegibilidadeEventoOut]
 
 

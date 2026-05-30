@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.schemas.common import MetaOut
+from app.schemas.common import MetaOut, PaginationOut
 
 
 class PerdaSerieItem(BaseModel):
@@ -24,6 +24,7 @@ class PerdaOut(BaseModel):
     por_razao: dict[str, float]
     qualidade_dados: QualidadeDadosPerda
     metadata: MetaOut
+    paginacao_serie: PaginationOut
     serie: list[PerdaSerieItem]
 
 

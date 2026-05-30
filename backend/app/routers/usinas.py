@@ -27,6 +27,7 @@ def listar_usinas(
         "metadata": {
             "mvp_scope_applied": True,
             "mvp_scope": "geradoras_renovaveis_submercado_ne",
+            "api_contract_version": "v1",
             "data_quality_status": None,
         },
         "items": data[offset : offset + limit],
@@ -83,6 +84,7 @@ def resumo_usina(
         "metadata": {
             "mvp_scope_applied": True,
             "mvp_scope": "geradoras_renovaveis_submercado_ne",
+            "api_contract_version": "v1",
             "data_quality_status": perda["qualidade_dados"]["status"],
         },
         "risco_48h": risco["previsoes"],

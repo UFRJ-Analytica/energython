@@ -29,6 +29,7 @@ class TestFinanceiroService(unittest.TestCase):
         self.assertEqual(len(out["serie"]), 2)
         self.assertIn("metadata", out)
         self.assertEqual(out["metadata"]["mvp_scope"], "geradoras_renovaveis_submercado_ne")
+        self.assertEqual(out["metadata"]["api_contract_version"], "v1")
 
     def test_projetar_exposicao(self):
         out = self.svc.projetar_exposicao("USI_NE_001", horizonte_horas=48)

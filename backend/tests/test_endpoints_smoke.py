@@ -36,6 +36,7 @@ class TestEndpointsSmoke(unittest.TestCase):
         self.assertIn("items", data)
         self.assertIn("metadata", data)
         self.assertEqual(data["metadata"]["mvp_scope"], "geradoras_renovaveis_submercado_ne")
+        self.assertEqual(data["metadata"]["api_contract_version"], "v1")
         self.assertTrue(isinstance(data["items"], list))
 
     def test_404_usina(self):
@@ -50,6 +51,26 @@ class TestEndpointsSmoke(unittest.TestCase):
         self.assertEqual(r.status_code, 422)
         body = r.json()
         self.assertEqual(body["detail"]["code"], "parametro_data_invalido")
+
+    def test_perda_paginada(self):
+        r = self.client.get(
+            "/api/usinas/USI_NE_001/perda?inicio=2026-05-01T00:00:00&fim=2026-05-02T00:00:00&limit=1&offset=0"
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("paginacao_serie", body)
+        self.assertEqual(body["paginacao_serie"]["total_count"], 2)
+        self.assertEqual(len(body["serie"]), 1)
+
+    def test_elegibilidade_paginada(self):
+        r = self.client.get(
+            "/api/usinas/USI_NE_001/elegibilidade?inicio=2026-05-01T00:00:00&fim=2026-05-02T00:00:00&limit=1&offset=0"
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("paginacao_eventos", body)
+        self.assertEqual(body["paginacao_eventos"]["total_count"], 2)
+        self.assertEqual(len(body["eventos"]), 1)
 
 
 if __name__ == "__main__":

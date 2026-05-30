@@ -94,6 +94,26 @@ class PostgresRepository(BaseRepository):
                     din_instante AS ref_ts
                 FROM public.fator_capacidade_2
                 WHERE id_ons IS NOT NULL
+
+                UNION ALL
+
+                SELECT
+                    id_ons AS usina_id,
+                    nom_usina AS nome,
+                    COALESCE(nom_tipocombustivel, nom_tipousina, 'desconhecida') AS fonte,
+                    NULL::double precision AS potencia_mw,
+                    CASE
+                        WHEN UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') THEN 'NE'
+                        WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
+                        WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'
+                        ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
+                    END AS submercado,
+                    NULL::double precision AS latitude,
+                    NULL::double precision AS longitude,
+                    NULL::double precision AS garantia_fisica_mwm,
+                    din_instante AS ref_ts
+                FROM public.geracao_usina_2
+                WHERE id_ons IS NOT NULL
             ), ranked AS (
                 SELECT *,
                        ROW_NUMBER() OVER (
@@ -136,6 +156,7 @@ class PostgresRepository(BaseRepository):
                 COALESCE(nom_tipocombustivel, 'desconhecida') AS fonte,
                 COALESCE(val_potenciainstalada, 0) AS potencia_mw,
                 CASE
+                    WHEN UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') THEN 'NE'
                     WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
                     WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'
                     ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
@@ -160,6 +181,7 @@ class PostgresRepository(BaseRepository):
                 COALESCE(nom_tipousina, 'desconhecida') AS fonte,
                 COALESCE(val_capacidadeinstalada, 0) AS potencia_mw,
                 CASE
+                    WHEN UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') THEN 'NE'
                     WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
                     WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'
                     ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
@@ -174,7 +196,32 @@ class PostgresRepository(BaseRepository):
             LIMIT 1
             """
             row_fc = self.db.execute(text(sql_public_fc), {"usina_id": usina_id, "ne_only": self.mvp_only_nordeste}).mappings().first()
-            return dict(row_fc) if row_fc else None
+            if row_fc:
+                return dict(row_fc)
+
+            sql_public_ger = """
+            SELECT
+                id_ons AS usina_id,
+                nom_usina AS nome,
+                COALESCE(nom_tipocombustivel, nom_tipousina, 'desconhecida') AS fonte,
+                NULL::double precision AS potencia_mw,
+                CASE
+                    WHEN UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') THEN 'NE'
+                    WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
+                    WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'
+                    ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
+                END AS submercado,
+                NULL::double precision AS latitude,
+                NULL::double precision AS longitude,
+                NULL::double precision AS garantia_fisica_mwm
+            FROM public.geracao_usina_2
+            WHERE id_ons = :usina_id
+              AND (:ne_only = false OR UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') OR UPPER(nom_subsistema) = 'NORDESTE')
+            ORDER BY din_instante DESC
+            LIMIT 1
+            """
+            row_ger = self.db.execute(text(sql_public_ger), {"usina_id": usina_id, "ne_only": self.mvp_only_nordeste}).mappings().first()
+            return dict(row_ger) if row_ger else None
 
     def get_constrained_off(self, usina_id: str, inicio: datetime, fim: datetime):
         self._validate_range(inicio, fim)
@@ -259,7 +306,26 @@ class PostgresRepository(BaseRepository):
             return [dict(r) for r in rows]
         except (ProgrammingError, OperationalError):
             self.db.rollback()
-            sql_public = """
+            sql_public_ger = """
+            SELECT
+                id_ons AS usina_id,
+                din_instante AS timestamp,
+                val_geracao AS geracao_mwh,
+                0::double precision AS fator_capacidade
+            FROM public.geracao_usina_2
+            WHERE id_ons = :usina_id
+              AND din_instante BETWEEN :inicio AND :fim
+              AND (:ne_only = false OR UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') OR UPPER(nom_subsistema) = 'NORDESTE')
+            ORDER BY din_instante
+            """
+            rows_ger = self.db.execute(
+                text(sql_public_ger),
+                {"usina_id": usina_id, "inicio": inicio, "fim": fim, "ne_only": self.mvp_only_nordeste},
+            ).mappings().all()
+            if rows_ger:
+                return [dict(r) for r in rows_ger]
+
+            sql_public_fc = """
             SELECT
                 id_ons AS usina_id,
                 din_instante AS timestamp,
@@ -272,7 +338,7 @@ class PostgresRepository(BaseRepository):
             ORDER BY din_instante
             """
             rows = self.db.execute(
-                text(sql_public),
+                text(sql_public_fc),
                 {"usina_id": usina_id, "inicio": inicio, "fim": fim, "ne_only": self.mvp_only_nordeste},
             ).mappings().all()
             return [dict(r) for r in rows]

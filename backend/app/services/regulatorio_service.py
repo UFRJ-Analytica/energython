@@ -2,33 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from app.domain.contracts import parse_constrained_off, parse_pld
+from app.domain.policies import RegulatorioPolicy
 from app.services.financeiro_service import FinanceiroService
-
-ELEGIBILIDADE_DEFAULT = {
-    "confiabilidade": True,
-    "indisponibilidade_externa": True,
-    "energetico": False,
-    "indefinido": False,
-}
-
-# Mapeamento de códigos COFF observados no EDA para o domínio interno
-RAZAO_COFF_MAP = {
-    "CNF": "confiabilidade",
-    "ENE": "energetico",
-    "REL": "indisponibilidade_externa",
-}
-
-
-def _normalize_razao(razao: str | None) -> str | None:
-    if not razao:
-        return None
-    r = str(razao).strip()
-    if r in RAZAO_COFF_MAP:
-        return RAZAO_COFF_MAP[r]
-    r_low = r.lower()
-    if r_low in ELEGIBILIDADE_DEFAULT:
-        return r_low
-    return r
 
 
 def _ts_hour_key(value) -> str:
@@ -46,12 +22,19 @@ class RegulatorioService:
         rag_agent,
         regras_elegibilidade=None,
         cache=None,
+        policy: RegulatorioPolicy | None = None,
     ):
         self.repo = repo
         self.classifier_agent = classifier_agent
         self.dossier_agent = dossier_agent
         self.rag_agent = rag_agent
-        self.regras_elegibilidade = regras_elegibilidade or ELEGIBILIDADE_DEFAULT
+        if policy is not None:
+            self.policy = policy
+        elif regras_elegibilidade is not None:
+            self.policy = RegulatorioPolicy(elegibilidade_por_razao=regras_elegibilidade)
+        else:
+            self.policy = RegulatorioPolicy.default()
+        self.regras_elegibilidade = self.policy.elegibilidade_por_razao
         self.financeiro_service = FinanceiroService(repo)
         self.cache = cache
 
@@ -66,13 +49,10 @@ class RegulatorioService:
         if not usina:
             raise ValueError("usina_nao_encontrada")
 
-        eventos = self.repo.get_constrained_off(usina_id, inicio, fim)
-        pld = self.repo.get_pld(usina["submercado"], inicio, fim)
-        pld_map = {str(p["timestamp"]): float(p["pld_reais_mwh"]) for p in pld}
-        pld_map_hora = {
-            _ts_hour_key(p["timestamp"]): float(p["pld_reais_mwh"])
-            for p in pld
-        }
+        eventos = parse_constrained_off(self.repo.get_constrained_off(usina_id, inicio, fim))
+        pld = parse_pld(self.repo.get_pld(usina["submercado"], inicio, fim))
+        pld_map = {str(p.timestamp): p.pld_reais_mwh for p in pld}
+        pld_map_hora = {_ts_hour_key(p.timestamp): p.pld_reais_mwh for p in pld}
 
         itens = []
         total_potencial = 0.0
@@ -83,8 +63,8 @@ class RegulatorioService:
         eventos_com_razao_normalizada = 0
 
         for e in eventos:
-            razao_original = e.get("razao_restricao") or e.get("cod_razaorestricao")
-            razao = _normalize_razao(razao_original)
+            razao_original = e.razao_restricao or e.cod_razaorestricao
+            razao = self.policy.normalize_razao(razao_original)
             if not razao_original:
                 eventos_sem_razao_original += 1
             elif razao_original != razao:
@@ -103,11 +83,11 @@ class RegulatorioService:
             else:
                 classificados_por_gold += 1
 
-            elegivel = self.regras_elegibilidade.get(razao, False)
-            energia = float(e.get("energia_restringida_mwh") or 0)
-            preco = pld_map.get(str(e["timestamp"]))
+            elegivel = self.policy.is_elegivel(razao)
+            energia = e.energia_restringida_mwh
+            preco = pld_map.get(str(e.timestamp))
             if preco is None:
-                preco = pld_map_hora.get(_ts_hour_key(e["timestamp"]))
+                preco = pld_map_hora.get(_ts_hour_key(e.timestamp))
             if preco is None:
                 pld_faltante_eventos += 1
                 preco = 0.0
@@ -116,7 +96,7 @@ class RegulatorioService:
 
             itens.append(
                 {
-                    "timestamp": str(e["timestamp"]),
+                    "timestamp": str(e.timestamp),
                     "razao_restricao": razao,
                     "energia_restringida_mwh": round(energia, 4),
                     "elegivel_ressarcimento": elegivel,

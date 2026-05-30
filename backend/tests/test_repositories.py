@@ -38,6 +38,13 @@ class TestRepositories(unittest.TestCase):
         self.assertTrue(all(i["is_forecast"] is True for i in forecast))
         self.assertTrue(all(i["is_forecast"] is False for i in observed))
 
+    def test_future_data_contract_methods_default_empty(self):
+        inicio = datetime.fromisoformat("2026-05-01T00:00:00")
+        fim = datetime.fromisoformat("2026-05-01T23:59:59")
+        self.assertEqual(self.repo.get_disponibilidade_usina("USI_NE_001", inicio, fim), [])
+        self.assertEqual(self.repo.get_despacho_dessem("USI_NE_001", inicio, fim), [])
+        self.assertEqual(self.repo.get_garantia_fisica("USI_NE_001", inicio, fim), [])
+
 
 if __name__ == "__main__":
     unittest.main()

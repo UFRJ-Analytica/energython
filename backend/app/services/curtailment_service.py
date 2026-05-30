@@ -41,6 +41,9 @@ class CurtailmentService:
         geracao_recent = self.repo.get_geracao_horaria(usina_id, now - timedelta(hours=48), now)
         constrained_recent = self.repo.get_constrained_off(usina_id, now - timedelta(hours=48), now)
         pld_recent = self.repo.get_pld(usina.get("submercado", "NE"), now - timedelta(hours=48), now)
+        disponibilidade_recent = self.repo.get_disponibilidade_usina(usina_id, now - timedelta(hours=48), now)
+        dessem_recent = self.repo.get_despacho_dessem(usina_id, now - timedelta(hours=48), now)
+        garantia_fisica_recent = self.repo.get_garantia_fisica(usina_id, now - timedelta(hours=48), now)
 
         feat_df = build_inference_frame(
             usina=usina,
@@ -48,6 +51,9 @@ class CurtailmentService:
             geracao_recent=geracao_recent,
             constrained_recent=constrained_recent,
             pld_recent=pld_recent,
+            disponibilidade_recent=disponibilidade_recent,
+            dessem_recent=dessem_recent,
+            garantia_fisica_recent=garantia_fisica_recent,
         )
 
         predictor = self._get_predictor()

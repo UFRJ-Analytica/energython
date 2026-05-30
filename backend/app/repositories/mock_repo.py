@@ -96,3 +96,15 @@ class MockRepository(BaseRepository):
         if is_forecast is not None:
             items = [c for c in items if c.get("is_forecast") is is_forecast]
         return sorted(items, key=lambda x: x["timestamp"])
+
+    def get_disponibilidade_usina(self, usina_id: str, inicio: datetime, fim: datetime):
+        # Preparado para dados reais de ONS (TEIFa/TEIP/disponibilidade) quando entrarem no gold.
+        return []
+
+    def get_despacho_dessem(self, usina_id: str, inicio: datetime, fim: datetime):
+        # Preparado para séries de despacho programado (DESSEM) quando entrarem no gold.
+        return []
+
+    def get_garantia_fisica(self, usina_id: str, inicio: datetime, fim: datetime):
+        # Preparado para séries de garantia física/sazonalização quando entrarem no gold.
+        return []

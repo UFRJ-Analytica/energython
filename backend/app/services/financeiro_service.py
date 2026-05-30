@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from app.domain.contracts import parse_constrained_off, parse_pld
+from app.domain.policies import FinanceiroPolicy
+
 
 def _ts_keys(value) -> tuple[str, str]:
     """Gera chaves de comparação robustas (timestamp exato + arredondado para hora)."""
@@ -11,21 +14,19 @@ def _ts_keys(value) -> tuple[str, str]:
 
 
 class FinanceiroService:
-    def __init__(self, repo):
+    def __init__(self, repo, policy: FinanceiroPolicy | None = None):
         self.repo = repo
+        self.policy = policy or FinanceiroPolicy.default()
 
     def calcular_perda(self, usina_id: str, inicio: datetime, fim: datetime) -> dict:
         usina = self.repo.get_usina(usina_id)
         if not usina:
             raise ValueError("usina_nao_encontrada")
 
-        eventos = self.repo.get_constrained_off(usina_id, inicio, fim)
-        pld = self.repo.get_pld(usina["submercado"], inicio, fim)
-        pld_map = {str(p["timestamp"]): float(p["pld_reais_mwh"]) for p in pld}
-        pld_map_hora = {
-            str((p["timestamp"] if isinstance(p["timestamp"], datetime) else datetime.fromisoformat(str(p["timestamp"]))).replace(minute=0, second=0, microsecond=0)): float(p["pld_reais_mwh"])
-            for p in pld
-        }
+        eventos = parse_constrained_off(self.repo.get_constrained_off(usina_id, inicio, fim))
+        pld = parse_pld(self.repo.get_pld(usina["submercado"], inicio, fim))
+        pld_map = {str(p.timestamp): p.pld_reais_mwh for p in pld}
+        pld_map_hora = {str(p.timestamp.replace(minute=0, second=0, microsecond=0)): p.pld_reais_mwh for p in pld}
 
         serie = []
         por_razao: dict[str, float] = {}
@@ -34,9 +35,9 @@ class FinanceiroService:
         pld_faltante_eventos = 0
 
         for e in eventos:
-            ts = str(e["timestamp"])
-            ts_exato, ts_hora = _ts_keys(e["timestamp"])
-            energia = float(e.get("energia_restringida_mwh") or 0)
+            ts = str(e.timestamp)
+            ts_exato, ts_hora = _ts_keys(e.timestamp)
+            energia = e.energia_restringida_mwh
             preco = pld_map.get(ts_exato)
             if preco is None:
                 preco = pld_map_hora.get(ts_hora)
@@ -44,7 +45,7 @@ class FinanceiroService:
                 pld_faltante_eventos += 1
                 preco = 0.0
             perda = energia * preco
-            razao = e.get("razao_restricao") or "indefinido"
+            razao = e.razao_restricao or "indefinido"
             total_perda += perda
             total_energia += energia
             por_razao[razao] = por_razao.get(razao, 0.0) + perda
@@ -58,12 +59,10 @@ class FinanceiroService:
                 }
             )
 
-        if pld_faltante_eventos == 0:
-            status = "completo"
-        elif len(pld) == 0:
-            status = "sem_pld"
-        else:
-            status = "parcial"
+        status = self.policy.classificar_status_qualidade_perda(
+            pld_faltante_eventos=pld_faltante_eventos,
+            total_pld_rows=len(pld),
+        )
 
         return {
             "usina_id": usina_id,
@@ -85,16 +84,16 @@ class FinanceiroService:
         if not usina:
             raise ValueError("usina_nao_encontrada")
 
-        eventos_hist = self.repo.get_constrained_off(usina_id, inicio_hist, agora)
-        pld_hist = self.repo.get_pld(usina["submercado"], inicio_hist, agora)
+        eventos_hist = parse_constrained_off(self.repo.get_constrained_off(usina_id, inicio_hist, agora))
+        pld_hist = parse_pld(self.repo.get_pld(usina["submercado"], inicio_hist, agora))
 
         energia_media_hora = 0.0
         if eventos_hist:
-            energia_media_hora = sum(float(e.get("energia_restringida_mwh") or 0) for e in eventos_hist) / len(eventos_hist)
+            energia_media_hora = sum(e.energia_restringida_mwh for e in eventos_hist) / len(eventos_hist)
 
         pld_medio = 0.0
         if pld_hist:
-            pld_medio = sum(float(p["pld_reais_mwh"]) for p in pld_hist) / len(pld_hist)
+            pld_medio = sum(p.pld_reais_mwh for p in pld_hist) / len(pld_hist)
 
         exposicao = energia_media_hora * pld_medio * horizonte_horas
         return {
@@ -104,6 +103,6 @@ class FinanceiroService:
             "premissas": {
                 "energia_media_restringida_mwh_por_hora": round(energia_media_hora, 4),
                 "pld_medio_reais_mwh": round(pld_medio, 4),
-                "metodo": "media_historica_30_dias",
+                "metodo": self.policy.metodo_exposicao,
             },
         }

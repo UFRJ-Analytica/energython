@@ -35,3 +35,18 @@ class BaseRepository(ABC):
         is_forecast: bool | None = None,
     ) -> list[dict[str, Any]]:
         raise NotImplementedError
+
+    @abstractmethod
+    def get_disponibilidade_usina(self, usina_id: str, inicio: datetime, fim: datetime) -> list[dict[str, Any]]:
+        """Série temporal de disponibilidade/TEIFa/TEIP da usina (quando existir no gold)."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_despacho_dessem(self, usina_id: str, inicio: datetime, fim: datetime) -> list[dict[str, Any]]:
+        """Série temporal de despacho programado (DESSEM) por usina (quando existir no gold)."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_garantia_fisica(self, usina_id: str, inicio: datetime, fim: datetime) -> list[dict[str, Any]]:
+        """Série temporal de garantia física/sazonalização da usina (quando existir no gold)."""
+        raise NotImplementedError

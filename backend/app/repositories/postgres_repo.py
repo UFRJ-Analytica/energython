@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.repositories.base import BaseRepository
 
@@ -11,6 +12,17 @@ class PostgresRepository(BaseRepository):
     def __init__(self, db, mvp_only_nordeste: bool = True):
         self.db = db
         self.mvp_only_nordeste = mvp_only_nordeste
+
+    def _safe_mappings_query(self, sql: str, params: dict) -> list[dict]:
+        """
+        Executa consulta retornando [] quando a tabela/visão ainda não existe no gold.
+        Isso mantém o backend operacional enquanto o time de dados finaliza ingestões.
+        """
+        try:
+            rows = self.db.execute(text(sql), params).mappings().all()
+            return [dict(r) for r in rows]
+        except (ProgrammingError, OperationalError):
+            return []
 
     @staticmethod
     def _validate_range(inicio: datetime, fim: datetime) -> None:
@@ -125,3 +137,39 @@ class PostgresRepository(BaseRepository):
             },
         ).mappings().all()
         return [dict(r) for r in rows]
+
+    def get_disponibilidade_usina(self, usina_id: str, inicio: datetime, fim: datetime):
+        self._validate_range(inicio, fim)
+        self._assert_usina_exists(usina_id)
+        sql = """
+        SELECT usina_id, timestamp, disponibilidade, teifa, teip
+        FROM gold.disponibilidade_usina
+        WHERE usina_id = :usina_id
+          AND timestamp BETWEEN :inicio AND :fim
+        ORDER BY timestamp
+        """
+        return self._safe_mappings_query(sql, {"usina_id": usina_id, "inicio": inicio, "fim": fim})
+
+    def get_despacho_dessem(self, usina_id: str, inicio: datetime, fim: datetime):
+        self._validate_range(inicio, fim)
+        self._assert_usina_exists(usina_id)
+        sql = """
+        SELECT usina_id, timestamp, geracao_programada_mwh
+        FROM gold.despacho_dessem
+        WHERE usina_id = :usina_id
+          AND timestamp BETWEEN :inicio AND :fim
+        ORDER BY timestamp
+        """
+        return self._safe_mappings_query(sql, {"usina_id": usina_id, "inicio": inicio, "fim": fim})
+
+    def get_garantia_fisica(self, usina_id: str, inicio: datetime, fim: datetime):
+        self._validate_range(inicio, fim)
+        self._assert_usina_exists(usina_id)
+        sql = """
+        SELECT usina_id, timestamp, garantia_fisica_mwh
+        FROM gold.garantia_fisica_horaria
+        WHERE usina_id = :usina_id
+          AND timestamp BETWEEN :inicio AND :fim
+        ORDER BY timestamp
+        """
+        return self._safe_mappings_query(sql, {"usina_id": usina_id, "inicio": inicio, "fim": fim})

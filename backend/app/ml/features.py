@@ -82,6 +82,9 @@ def build_inference_frame(
     geracao_recent: list[dict],
     constrained_recent: list[dict],
     pld_recent: list[dict],
+    disponibilidade_recent: list[dict] | None = None,
+    dessem_recent: list[dict] | None = None,
+    garantia_fisica_recent: list[dict] | None = None,
 ) -> pd.DataFrame:
     df = pd.DataFrame(clima_future)
     if df.empty:
@@ -108,6 +111,27 @@ def build_inference_frame(
         last_mm3 = float(serie.tail(3).mean()) if not serie.empty else 0.0
         last_mm24 = float(serie.tail(24).mean()) if not serie.empty else 0.0
 
+    # Fallbacks de novas features (preparação para dados reais)
+    disponibilidade_recent = disponibilidade_recent or []
+    dessem_recent = dessem_recent or []
+    garantia_fisica_recent = garantia_fisica_recent or []
+
+    def _last_or_default(items: list[dict], key: str, default: float = 0.0) -> float:
+        if not items:
+            return default
+        ordered = sorted(items, key=lambda x: x.get("timestamp"))
+        raw = ordered[-1].get(key, default)
+        try:
+            return float(raw or default)
+        except Exception:
+            return default
+
+    disponibilidade_val = _last_or_default(disponibilidade_recent, "disponibilidade", 0.0)
+    teifa_val = _last_or_default(disponibilidade_recent, "teifa", 0.0)
+    teip_val = _last_or_default(disponibilidade_recent, "teip", 0.0)
+    dessem_val = _last_or_default(dessem_recent, "geracao_programada_mwh", 0.0)
+    gf_val = _last_or_default(garantia_fisica_recent, "garantia_fisica_mwh", 0.0)
+
     pld_map = {x["timestamp"]: x.get("pld_reais_mwh") for x in pld_recent}
     pld_default = None
     if pld_recent:
@@ -119,6 +143,16 @@ def build_inference_frame(
     df["pld_reais_mwh"] = df["timestamp"].map(pld_map).fillna(pld_default if pld_default is not None else 0.0)
     df["mm_corte_3h"] = last_mm3
     df["mm_corte_24h"] = last_mm24
+
+    # Novas colunas opcionais: já preparadas mesmo sem ingestão real no banco
+    df["disponibilidade"] = disponibilidade_val
+    df["teifa"] = teifa_val
+    df["teip"] = teip_val
+    df["geracao_programada_mwh"] = dessem_val
+    df["garantia_fisica_mwh"] = gf_val
+    df["flag_missing_disponibilidade"] = 0 if disponibilidade_recent else 1
+    df["flag_missing_dessem"] = 0 if dessem_recent else 1
+    df["flag_missing_garantia_fisica"] = 0 if garantia_fisica_recent else 1
 
     ts = pd.to_datetime(df["timestamp"])
     df["hora"] = ts.dt.hour

@@ -3,6 +3,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 
+def _ts_keys(value) -> tuple[str, str]:
+    """Gera chaves de comparação robustas (timestamp exato + arredondado para hora)."""
+    dt = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+    dt = dt.replace(tzinfo=None)
+    return str(dt), str(dt.replace(minute=0, second=0, microsecond=0))
+
+
 class FinanceiroService:
     def __init__(self, repo):
         self.repo = repo
@@ -15,6 +22,10 @@ class FinanceiroService:
         eventos = self.repo.get_constrained_off(usina_id, inicio, fim)
         pld = self.repo.get_pld(usina["submercado"], inicio, fim)
         pld_map = {str(p["timestamp"]): float(p["pld_reais_mwh"]) for p in pld}
+        pld_map_hora = {
+            str((p["timestamp"] if isinstance(p["timestamp"], datetime) else datetime.fromisoformat(str(p["timestamp"]))).replace(minute=0, second=0, microsecond=0)): float(p["pld_reais_mwh"])
+            for p in pld
+        }
 
         serie = []
         por_razao: dict[str, float] = {}
@@ -24,8 +35,11 @@ class FinanceiroService:
 
         for e in eventos:
             ts = str(e["timestamp"])
+            ts_exato, ts_hora = _ts_keys(e["timestamp"])
             energia = float(e.get("energia_restringida_mwh") or 0)
-            preco = pld_map.get(ts)
+            preco = pld_map.get(ts_exato)
+            if preco is None:
+                preco = pld_map_hora.get(ts_hora)
             if preco is None:
                 pld_faltante_eventos += 1
                 preco = 0.0

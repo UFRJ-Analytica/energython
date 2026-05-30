@@ -179,6 +179,12 @@ Retorno (shape)
   - `eventos_totais`
   - `eventos_classificados_por_ia`
   - `eventos_com_razao_gold`
+- `qualidade_dados`
+  - `status: completo | parcial`
+  - `pld_faltante_eventos`
+  - `eventos_sem_razao_original`
+  - `eventos_com_razao_normalizada`
+  - `total_eventos`
 - `eventos[]`
   - `timestamp`
   - `razao_restricao`

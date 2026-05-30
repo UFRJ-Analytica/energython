@@ -18,10 +18,19 @@ class QualidadeClassificacaoOut(BaseModel):
     eventos_com_razao_gold: int
 
 
+class QualidadeDadosRegulatorioOut(BaseModel):
+    status: str
+    pld_faltante_eventos: int
+    eventos_sem_razao_original: int
+    eventos_com_razao_normalizada: int
+    total_eventos: int
+
+
 class ElegibilidadeOut(BaseModel):
     usina_id: str
     total_potencial_ressarcivel_reais: float
     qualidade_classificacao: QualidadeClassificacaoOut
+    qualidade_dados: QualidadeDadosRegulatorioOut
     eventos: list[ElegibilidadeEventoOut]
 
 

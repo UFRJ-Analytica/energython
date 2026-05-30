@@ -11,6 +11,31 @@ ELEGIBILIDADE_DEFAULT = {
     "indefinido": False,
 }
 
+# Mapeamento de códigos COFF observados no EDA para o domínio interno
+RAZAO_COFF_MAP = {
+    "CNF": "confiabilidade",
+    "ENE": "energetico",
+    "REL": "indisponibilidade_externa",
+}
+
+
+def _normalize_razao(razao: str | None) -> str | None:
+    if not razao:
+        return None
+    r = str(razao).strip()
+    if r in RAZAO_COFF_MAP:
+        return RAZAO_COFF_MAP[r]
+    r_low = r.lower()
+    if r_low in ELEGIBILIDADE_DEFAULT:
+        return r_low
+    return r
+
+
+def _ts_hour_key(value) -> str:
+    dt = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+    dt = dt.replace(tzinfo=None)
+    return str(dt.replace(minute=0, second=0, microsecond=0))
+
 
 class RegulatorioService:
     def __init__(
@@ -44,14 +69,26 @@ class RegulatorioService:
         eventos = self.repo.get_constrained_off(usina_id, inicio, fim)
         pld = self.repo.get_pld(usina["submercado"], inicio, fim)
         pld_map = {str(p["timestamp"]): float(p["pld_reais_mwh"]) for p in pld}
+        pld_map_hora = {
+            _ts_hour_key(p["timestamp"]): float(p["pld_reais_mwh"])
+            for p in pld
+        }
 
         itens = []
         total_potencial = 0.0
         classificados_por_ia = 0
         classificados_por_gold = 0
+        pld_faltante_eventos = 0
+        eventos_sem_razao_original = 0
+        eventos_com_razao_normalizada = 0
 
         for e in eventos:
-            razao = e.get("razao_restricao")
+            razao_original = e.get("razao_restricao") or e.get("cod_razaorestricao")
+            razao = _normalize_razao(razao_original)
+            if not razao_original:
+                eventos_sem_razao_original += 1
+            elif razao_original != razao:
+                eventos_com_razao_normalizada += 1
             confianca = 1.0
             justificativa = "classificacao_gold"
             fonte_classificacao = "gold"
@@ -68,7 +105,12 @@ class RegulatorioService:
 
             elegivel = self.regras_elegibilidade.get(razao, False)
             energia = float(e.get("energia_restringida_mwh") or 0)
-            preco = pld_map.get(str(e["timestamp"]), 0.0)
+            preco = pld_map.get(str(e["timestamp"]))
+            if preco is None:
+                preco = pld_map_hora.get(_ts_hour_key(e["timestamp"]))
+            if preco is None:
+                pld_faltante_eventos += 1
+                preco = 0.0
             valor = energia * preco if elegivel else 0.0
             total_potencial += valor
 
@@ -92,6 +134,17 @@ class RegulatorioService:
                 "eventos_totais": len(eventos),
                 "eventos_classificados_por_ia": classificados_por_ia,
                 "eventos_com_razao_gold": classificados_por_gold,
+            },
+            "qualidade_dados": {
+                "status": (
+                    "completo"
+                    if pld_faltante_eventos == 0 and eventos_sem_razao_original == 0
+                    else "parcial"
+                ),
+                "pld_faltante_eventos": pld_faltante_eventos,
+                "eventos_sem_razao_original": eventos_sem_razao_original,
+                "eventos_com_razao_normalizada": eventos_com_razao_normalizada,
+                "total_eventos": len(eventos),
             },
             "eventos": itens,
         }

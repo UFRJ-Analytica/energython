@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     anthropic_model_fast: str = "claude-haiku-4-5"
     anthropic_model_smart: str = "claude-sonnet-4-5"
     mvp_only_nordeste: bool = True
+    curtailment_model_path: str = "models_ml/curtailment_model.pkl"
+    curtailment_threshold_mwh: float = 1.0
+
+    # Regras de elegibilidade regulatória (parametrizáveis por ambiente)
+    elegivel_confiabilidade: bool = True
+    elegivel_indisponibilidade_externa: bool = True
+    elegivel_energetico: bool = False
+    elegivel_indefinido: bool = False
 
     @field_validator("data_backend")
     @classmethod

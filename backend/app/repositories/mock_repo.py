@@ -13,11 +13,16 @@ class MockRepository(BaseRepository):
         self.usinas = self._load_csv(base / "usinas.csv")
         self.co = self._load_csv(base / "constrained_off.csv", datetime_cols={"timestamp"})
         self.pld = self._load_csv(base / "pld_horario.csv", datetime_cols={"timestamp"})
+        self.geracao = self._load_csv(base / "geracao_horaria.csv", datetime_cols={"timestamp"})
+        self.clima = self._load_csv(base / "clima_horario.csv", datetime_cols={"timestamp"})
 
         if mvp_only_nordeste:
             self.usinas = [u for u in self.usinas if u.get("submercado") == "NE"]
             self.co = [e for e in self.co if e.get("submercado") == "NE"]
             self.pld = [p for p in self.pld if p.get("submercado") == "NE"]
+            usinas_ne = {u.get("usina_id") for u in self.usinas}
+            self.geracao = [g for g in self.geracao if g.get("usina_id") in usinas_ne]
+            self.clima = [c for c in self.clima if c.get("usina_id") in usinas_ne]
 
     def _load_csv(self, path: Path, datetime_cols: set[str] | None = None):
         datetime_cols = datetime_cols or set()
@@ -28,7 +33,7 @@ class MockRepository(BaseRepository):
                 parsed = {}
                 for k, v in row.items():
                     if k in datetime_cols and v:
-                        parsed[k] = datetime.fromisoformat(v)
+                        parsed[k] = datetime.fromisoformat(v.replace("Z", "+00:00")).replace(tzinfo=None)
                     elif v is None or v == "":
                         parsed[k] = None
                     else:
@@ -38,6 +43,9 @@ class MockRepository(BaseRepository):
 
     @staticmethod
     def _coerce(value: str):
+        value_low = value.strip().lower()
+        if value_low in {"true", "false"}:
+            return value_low == "true"
         try:
             if "." in value:
                 return float(value)
@@ -71,4 +79,20 @@ class MockRepository(BaseRepository):
             p for p in self.pld
             if p.get("submercado") == submercado and inicio <= p.get("timestamp") <= fim
         ]
+        return sorted(items, key=lambda x: x["timestamp"])
+
+    def get_geracao_horaria(self, usina_id: str, inicio: datetime, fim: datetime):
+        items = [
+            g for g in self.geracao
+            if g.get("usina_id") == usina_id and inicio <= g.get("timestamp") <= fim
+        ]
+        return sorted(items, key=lambda x: x["timestamp"])
+
+    def get_clima_horario(self, usina_id: str, inicio: datetime, fim: datetime, is_forecast: bool | None = None):
+        items = [
+            c for c in self.clima
+            if c.get("usina_id") == usina_id and inicio <= c.get("timestamp") <= fim
+        ]
+        if is_forecast is not None:
+            items = [c for c in items if c.get("is_forecast") is is_forecast]
         return sorted(items, key=lambda x: x["timestamp"])

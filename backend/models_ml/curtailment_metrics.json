@@ -1,0 +1,8 @@
+{
+  "rows": 5,
+  "train_rows": 4,
+  "test_rows": 1,
+  "auc": null,
+  "mae": 3.4499999999999993,
+  "threshold_mwh": 1.0
+}

@@ -35,8 +35,10 @@ def get_bess_service(repo: BaseRepository = Depends(get_repo)) -> BessService:
     return BessService(repo)
 
 
-def get_curtailment_service(repo: BaseRepository = Depends(get_repo)) -> CurtailmentService:
-    return CurtailmentService(repo)
+def get_curtailment_service(
+    repo: BaseRepository = Depends(get_repo), settings: Settings = Depends(get_settings)
+) -> CurtailmentService:
+    return CurtailmentService(repo, model_path=settings.curtailment_model_path)
 
 
 def get_regulatorio_service(
@@ -46,4 +48,17 @@ def get_regulatorio_service(
     classifier = ClassifierAgent(llm, model=settings.anthropic_model_fast)
     dossier = DossierAgent(llm, model=settings.anthropic_model_smart)
     rag = RagAgent(llm, model=settings.anthropic_model_smart, knowledge_dir=Path(__file__).resolve().parent / "knowledge")
-    return RegulatorioService(repo=repo, classifier_agent=classifier, dossier_agent=dossier, rag_agent=rag, cache=regulatorio_cache)
+    regras = {
+        "confiabilidade": settings.elegivel_confiabilidade,
+        "indisponibilidade_externa": settings.elegivel_indisponibilidade_externa,
+        "energetico": settings.elegivel_energetico,
+        "indefinido": settings.elegivel_indefinido,
+    }
+    return RegulatorioService(
+        repo=repo,
+        classifier_agent=classifier,
+        dossier_agent=dossier,
+        rag_agent=rag,
+        regras_elegibilidade=regras,
+        cache=regulatorio_cache,
+    )

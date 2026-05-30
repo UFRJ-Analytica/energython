@@ -21,3 +21,17 @@ class BaseRepository(ABC):
     @abstractmethod
     def get_pld(self, submercado: str, inicio: datetime, fim: datetime) -> list[dict[str, Any]]:
         raise NotImplementedError
+
+    @abstractmethod
+    def get_geracao_horaria(self, usina_id: str, inicio: datetime, fim: datetime) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_clima_horario(
+        self,
+        usina_id: str,
+        inicio: datetime,
+        fim: datetime,
+        is_forecast: bool | None = None,
+    ) -> list[dict[str, Any]]:
+        raise NotImplementedError

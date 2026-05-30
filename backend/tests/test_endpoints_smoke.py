@@ -17,7 +17,16 @@ class TestEndpointsSmoke(unittest.TestCase):
     def test_readiness(self):
         r = self.client.get("/readiness")
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json()["status"], "ready")
+        body = r.json()
+        self.assertEqual(body["status"], "ready")
+        self.assertIn("data_backend", body)
+        self.assertIn("checks", body)
+
+    def test_usinas_filter_submercado_ne(self):
+        r = self.client.get("/api/usinas?submercado=NE&limit=50&offset=0")
+        self.assertEqual(r.status_code, 200)
+        items = r.json()["items"]
+        self.assertTrue(all(i["submercado"] == "NE" for i in items))
 
     def test_usinas_list(self):
         r = self.client.get("/api/usinas?limit=1&offset=0")

@@ -7,11 +7,21 @@ class ElegibilidadeEventoOut(BaseModel):
     energia_restringida_mwh: float
     elegivel_ressarcimento: bool
     valor_potencial_reais: float
+    classificacao_fonte: str
+    classificacao_confianca: float
+    classificacao_justificativa: str
+
+
+class QualidadeClassificacaoOut(BaseModel):
+    eventos_totais: int
+    eventos_classificados_por_ia: int
+    eventos_com_razao_gold: int
 
 
 class ElegibilidadeOut(BaseModel):
     usina_id: str
     total_potencial_ressarcivel_reais: float
+    qualidade_classificacao: QualidadeClassificacaoOut
     eventos: list[ElegibilidadeEventoOut]
 
 

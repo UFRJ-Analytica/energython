@@ -20,11 +20,15 @@ class FinanceiroService:
         por_razao: dict[str, float] = {}
         total_perda = 0.0
         total_energia = 0.0
+        pld_faltante_eventos = 0
 
         for e in eventos:
             ts = str(e["timestamp"])
             energia = float(e.get("energia_restringida_mwh") or 0)
-            preco = pld_map.get(ts, 0.0)
+            preco = pld_map.get(ts)
+            if preco is None:
+                pld_faltante_eventos += 1
+                preco = 0.0
             perda = energia * preco
             razao = e.get("razao_restricao") or "indefinido"
             total_perda += perda
@@ -40,11 +44,23 @@ class FinanceiroService:
                 }
             )
 
+        if pld_faltante_eventos == 0:
+            status = "completo"
+        elif len(pld) == 0:
+            status = "sem_pld"
+        else:
+            status = "parcial"
+
         return {
             "usina_id": usina_id,
             "total_perda_reais": round(total_perda, 2),
             "total_energia_restringida_mwh": round(total_energia, 4),
             "por_razao": {k: round(v, 2) for k, v in por_razao.items()},
+            "qualidade_dados": {
+                "status": status,
+                "pld_faltante_eventos": pld_faltante_eventos,
+                "total_eventos": len(eventos),
+            },
             "serie": serie,
         }
 

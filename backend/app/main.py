@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.database import engine
 from app.routers.financeiro import router as financeiro_router
 from app.routers.regulatorio import router as regulatorio_router
 from app.routers.usinas import router as usinas_router
@@ -34,5 +35,28 @@ def health():
 @app.get("/readiness")
 def readiness():
     if settings.data_backend == "postgres":
-        return {"status": "ready", "data_backend": "postgres"}
-    return {"status": "ready", "data_backend": "mock"}
+        if engine is None:
+            return {
+                "status": "not_ready",
+                "data_backend": "postgres",
+                "checks": {"db_connection": "driver_or_engine_unavailable"},
+            }
+        try:
+            with engine.connect() as conn:
+                conn.exec_driver_sql("SELECT 1")
+            return {
+                "status": "ready",
+                "data_backend": "postgres",
+                "checks": {"db_connection": "ok"},
+            }
+        except Exception:
+            return {
+                "status": "not_ready",
+                "data_backend": "postgres",
+                "checks": {"db_connection": "error"},
+            }
+    return {
+        "status": "ready",
+        "data_backend": "mock",
+        "checks": {"mock_repository": "ok"},
+    }

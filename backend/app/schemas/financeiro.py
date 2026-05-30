@@ -9,11 +9,18 @@ class PerdaSerieItem(BaseModel):
     razao_restricao: str
 
 
+class QualidadeDadosPerda(BaseModel):
+    status: str
+    pld_faltante_eventos: int
+    total_eventos: int
+
+
 class PerdaOut(BaseModel):
     usina_id: str
     total_perda_reais: float
     total_energia_restringida_mwh: float
     por_razao: dict[str, float]
+    qualidade_dados: QualidadeDadosPerda
     serie: list[PerdaSerieItem]
 
 

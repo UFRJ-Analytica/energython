@@ -31,7 +31,7 @@ class RegulatorioService:
         self.cache = cache
 
     def classificar_eventos(self, usina_id: str, inicio: datetime, fim: datetime) -> dict:
-        cache_key = f"classificar:{usina_id}:{inicio.isoformat()}:{fim.isoformat()}"
+        cache_key = f"classificar:{usina_id}:{inicio.isoformat()}:{fim.isoformat()}:{hash(frozenset(self.regras_elegibilidade.items()))}"
         if self.cache:
             cached = self.cache.get(cache_key)
             if cached is not None:
@@ -47,11 +47,24 @@ class RegulatorioService:
 
         itens = []
         total_potencial = 0.0
+        classificados_por_ia = 0
+        classificados_por_gold = 0
+
         for e in eventos:
             razao = e.get("razao_restricao")
+            confianca = 1.0
+            justificativa = "classificacao_gold"
+            fonte_classificacao = "gold"
+
             if not razao or razao not in self.regras_elegibilidade:
                 pred = self.classifier_agent.classificar_evento(e)
                 razao = pred.get("razao", "indefinido")
+                confianca = float(pred.get("confianca", 0.0) or 0.0)
+                justificativa = str(pred.get("justificativa", "classificacao_por_ia"))
+                fonte_classificacao = "ia"
+                classificados_por_ia += 1
+            else:
+                classificados_por_gold += 1
 
             elegivel = self.regras_elegibilidade.get(razao, False)
             energia = float(e.get("energia_restringida_mwh") or 0)
@@ -66,12 +79,20 @@ class RegulatorioService:
                     "energia_restringida_mwh": round(energia, 4),
                     "elegivel_ressarcimento": elegivel,
                     "valor_potencial_reais": round(valor, 2),
+                    "classificacao_fonte": fonte_classificacao,
+                    "classificacao_confianca": round(confianca, 4),
+                    "classificacao_justificativa": justificativa,
                 }
             )
 
         out = {
             "usina_id": usina_id,
             "total_potencial_ressarcivel_reais": round(total_potencial, 2),
+            "qualidade_classificacao": {
+                "eventos_totais": len(eventos),
+                "eventos_classificados_por_ia": classificados_por_ia,
+                "eventos_com_razao_gold": classificados_por_gold,
+            },
             "eventos": itens,
         }
         if self.cache:

@@ -74,6 +74,11 @@ class FinanceiroService:
                 "pld_faltante_eventos": pld_faltante_eventos,
                 "total_eventos": len(eventos),
             },
+            "metadata": {
+                "mvp_scope_applied": True,
+                "mvp_scope": "geradoras_renovaveis_submercado_ne",
+                "data_quality_status": status,
+            },
             "serie": serie,
         }
 

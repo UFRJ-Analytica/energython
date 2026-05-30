@@ -34,6 +34,8 @@ class TestEndpointsSmoke(unittest.TestCase):
         data = r.json()
         self.assertIn("total_count", data)
         self.assertIn("items", data)
+        self.assertIn("metadata", data)
+        self.assertEqual(data["metadata"]["mvp_scope"], "geradoras_renovaveis_submercado_ne")
         self.assertTrue(isinstance(data["items"], list))
 
     def test_404_usina(self):
@@ -41,6 +43,7 @@ class TestEndpointsSmoke(unittest.TestCase):
         self.assertEqual(r.status_code, 404)
         body = r.json()
         self.assertEqual(body["detail"]["code"], "usina_nao_encontrada")
+        self.assertIn("context", body["detail"])
 
     def test_422_data_invalida(self):
         r = self.client.get("/api/usinas/USI_NE_001/perda?inicio=abc&fim=2026-05-01T00:00:00")

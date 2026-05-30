@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from app.schemas.common import MetaOut
+
 
 class UsinaOut(BaseModel):
     usina_id: str
@@ -13,6 +15,7 @@ class UsinaListOut(BaseModel):
     total_count: int
     limit: int
     offset: int
+    metadata: MetaOut
     items: list[UsinaOut]
 
 
@@ -23,4 +26,5 @@ class UsinaResumoOut(BaseModel):
     percentual_ressarcivel: float
     total_eventos_corte: int
     ticket_medio_evento_reais: float
+    metadata: MetaOut
     risco_48h: list[dict]

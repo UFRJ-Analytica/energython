@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from app.schemas.common import MetaOut
+
 
 class PerdaSerieItem(BaseModel):
     timestamp: str
@@ -21,6 +23,7 @@ class PerdaOut(BaseModel):
     total_energia_restringida_mwh: float
     por_razao: dict[str, float]
     qualidade_dados: QualidadeDadosPerda
+    metadata: MetaOut
     serie: list[PerdaSerieItem]
 
 

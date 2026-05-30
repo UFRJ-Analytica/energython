@@ -107,6 +107,12 @@ class RegulatorioService:
                 }
             )
 
+        qualidade_status = (
+            "completo"
+            if pld_faltante_eventos == 0 and eventos_sem_razao_original == 0
+            else "parcial"
+        )
+
         out = {
             "usina_id": usina_id,
             "total_potencial_ressarcivel_reais": round(total_potencial, 2),
@@ -116,15 +122,16 @@ class RegulatorioService:
                 "eventos_com_razao_gold": classificados_por_gold,
             },
             "qualidade_dados": {
-                "status": (
-                    "completo"
-                    if pld_faltante_eventos == 0 and eventos_sem_razao_original == 0
-                    else "parcial"
-                ),
+                "status": qualidade_status,
                 "pld_faltante_eventos": pld_faltante_eventos,
                 "eventos_sem_razao_original": eventos_sem_razao_original,
                 "eventos_com_razao_normalizada": eventos_com_razao_normalizada,
                 "total_eventos": len(eventos),
+            },
+            "metadata": {
+                "mvp_scope_applied": True,
+                "mvp_scope": "geradoras_renovaveis_submercado_ne",
+                "data_quality_status": qualidade_status,
             },
             "eventos": itens,
         }

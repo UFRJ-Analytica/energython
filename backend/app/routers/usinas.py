@@ -24,6 +24,11 @@ def listar_usinas(
         "total_count": len(data),
         "limit": limit,
         "offset": offset,
+        "metadata": {
+            "mvp_scope_applied": True,
+            "mvp_scope": "geradoras_renovaveis_submercado_ne",
+            "data_quality_status": None,
+        },
         "items": data[offset : offset + limit],
     }
 
@@ -75,5 +80,10 @@ def resumo_usina(
         "percentual_ressarcivel": round(perc_ress, 2),
         "total_eventos_corte": total_eventos,
         "ticket_medio_evento_reais": round(ticket_medio, 2),
+        "metadata": {
+            "mvp_scope_applied": True,
+            "mvp_scope": "geradoras_renovaveis_submercado_ne",
+            "data_quality_status": perda["qualidade_dados"]["status"],
+        },
         "risco_48h": risco["previsoes"],
     }

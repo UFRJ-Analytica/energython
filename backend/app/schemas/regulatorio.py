@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from app.schemas.common import MetaOut
+
 
 class ElegibilidadeEventoOut(BaseModel):
     timestamp: str
@@ -31,6 +33,7 @@ class ElegibilidadeOut(BaseModel):
     total_potencial_ressarcivel_reais: float
     qualidade_classificacao: QualidadeClassificacaoOut
     qualidade_dados: QualidadeDadosRegulatorioOut
+    metadata: MetaOut
     eventos: list[ElegibilidadeEventoOut]
 
 

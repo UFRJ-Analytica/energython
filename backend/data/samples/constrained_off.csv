@@ -1,0 +1,6 @@
+usina_id,timestamp,fonte,geracao_verificada_mwh,geracao_referencia_mwh,energia_restringida_mwh,razao_restricao,submercado
+USI_NE_001,2026-05-01T12:00:00,eolica,60,75,15,confiabilidade,NE
+USI_NE_001,2026-05-01T13:00:00,eolica,58,73,15,energetico,NE
+USI_NE_002,2026-05-02T12:00:00,solar,45,70,25,indisponibilidade_externa,NE
+USI_NE_002,2026-05-02T13:00:00,solar,40,66,26,energetico,NE
+USI_SE_001,2026-05-02T13:00:00,solar,40,66,26,confiabilidade,SE_CO

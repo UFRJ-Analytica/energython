@@ -1,0 +1,4 @@
+usina_id,nome,fonte,potencia_mw,submercado,latitude,longitude,garantia_fisica_mwm
+USI_NE_001,Serra do Vento I,eolica,120,NE,-5.8,-35.2,65
+USI_NE_002,Sol do Sertao I,solar,90,NE,-9.4,-40.5,48
+USI_SE_001,Teste Sudeste,solar,80,SE_CO,-21.7,-43.3,42

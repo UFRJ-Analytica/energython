@@ -1,0 +1,19 @@
+[project]
+name = "curtailiq-backend"
+version = "0.1.0"
+description = "Backend MVP CurtailIQ"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn>=0.30.0",
+  "pydantic>=2.8.0",
+  "pydantic-settings>=2.3.0",
+  "sqlalchemy>=2.0.30",
+  "psycopg[binary]>=3.2.0",
+  "pandas>=2.2.2",
+  "python-dotenv>=1.0.1",
+  "anthropic>=0.34.0"
+]
+
+[tool.uv]
+package = false

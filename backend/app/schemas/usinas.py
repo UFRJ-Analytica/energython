@@ -9,6 +9,8 @@ class UsinaOut(BaseModel):
     fonte: str
     potencia_mw: float
     submercado: str
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class UsinaListOut(BaseModel):

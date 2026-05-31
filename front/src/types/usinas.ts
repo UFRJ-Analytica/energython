@@ -4,6 +4,8 @@ export interface UsinaOut {
   fonte: "solar" | "eolica"
   potencia_mw: number
   submercado: string
+  latitude?: number | null
+  longitude?: number | null
 }
 
 export interface UsinaListOut {

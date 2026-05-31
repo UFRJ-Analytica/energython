@@ -5,6 +5,7 @@ import { ErrorState } from "@/components/shared/ErrorState"
 import { useUsinas } from "@/hooks/useUsinas"
 import { PlantCard } from "./PlantCard"
 import { PlantFilters } from "./PlantFilters"
+import { PlantMap } from "./PlantMap"
 
 const LIMIT = 12
 
@@ -38,11 +39,15 @@ export default function PlantList() {
       {error && <ErrorState error={error} />}
 
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
-        </div>
+        <>
+          <Skeleton className="mb-4 h-72 w-full rounded-xl" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+          </div>
+        </>
       ) : (
         <>
+          {data && <div className="mb-4"><PlantMap usinas={data.items} /></div>}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
             {data?.items.map((u) => <PlantCard key={u.usina_id} usina={u} />)}
           </div>

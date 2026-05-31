@@ -119,6 +119,30 @@ class PostgresRepository(BaseRepository):
                 rows = self.db.execute(text(sql_public_disp), {"ne_only": self.mvp_only_nordeste}).mappings().all()
                 data = [dict(r) for r in rows]
 
+            # Enriquecer coordenadas via fator_capacidade_2 quando fallback veio sem lat/lon.
+            ids_sem_coord = [str(u.get("usina_id")) for u in data if u.get("latitude") is None or u.get("longitude") is None]
+            if ids_sem_coord:
+                try:
+                    sql_coords = """
+                    SELECT id_ons AS usina_id,
+                           MAX(val_latitudesecoletora)::double precision AS latitude,
+                           MAX(val_longitudesecoletora)::double precision AS longitude
+                    FROM public.fator_capacidade_2
+                    WHERE id_ons = ANY(:ids)
+                    GROUP BY id_ons
+                    """
+                    rows_coords = self.db.execute(text(sql_coords), {"ids": ids_sem_coord}).mappings().all()
+                    by_id = {str(r["usina_id"]): dict(r) for r in rows_coords}
+                    for u in data:
+                        uid = str(u.get("usina_id"))
+                        if uid in by_id:
+                            if u.get("latitude") is None:
+                                u["latitude"] = by_id[uid].get("latitude")
+                            if u.get("longitude") is None:
+                                u["longitude"] = by_id[uid].get("longitude")
+                except Exception:
+                    self.db.rollback()
+
             if fonte:
                 f = fonte.lower()
                 data = [u for u in data if f in str(u.get("fonte", "")).lower()]

@@ -31,6 +31,7 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
   }, [franquiaInput])
 
   const effective = fluxo.data?.resultado_elegibilidade ?? data
+  const isRefreshing = fluxo.isPending
 
   const handleExecutarFluxo = () => {
     fluxo.mutate({
@@ -63,10 +64,11 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
                 placeholder="Ex.: 82"
               />
             </div>
-            <Button onClick={handleExecutarFluxo} disabled={fluxo.isPending}>
-              {fluxo.isPending ? "Executando agente..." : "Executar fluxo completo"}
+            <Button onClick={handleExecutarFluxo} disabled={isRefreshing}>
+              {isRefreshing ? "Executando agente e atualizando tabela..." : "Executar fluxo completo"}
             </Button>
             <span className="text-xs text-muted-foreground">Human-in-the-loop ativo: sem submissão automática.</span>
+            {isRefreshing && <Badge variant="secondary">Atualizando resultados…</Badge>}
           </div>
           {fluxo.error && <div className="mt-3"><ErrorState error={fluxo.error} /></div>}
         </CardContent>
@@ -82,6 +84,10 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">Eventos de elegibilidade</CardTitle>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant="secondary">Dentro da franquia</Badge>
+            <Badge className="bg-emerald-600 hover:bg-emerald-600">Excedente ressarcível</Badge>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -93,12 +99,16 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
                 <TableHead>Elegível</TableHead>
                 <TableHead>Potencial</TableHead>
                 <TableHead>Pós-franquia</TableHead>
+                <TableHead>Status franquia</TableHead>
                 <TableHead>Fonte</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {effective.eventos.map((ev, i) => (
-                <TableRow key={`${ev.timestamp}-${i}`}>
+                <TableRow
+                  key={`${ev.timestamp}-${i}`}
+                  className={ev.valor_ressarcivel_pos_franquia_reais > 0 ? "bg-emerald-50/60 dark:bg-emerald-950/20" : ""}
+                >
                   <TableCell className="text-xs">{fmtDate(ev.timestamp)}</TableCell>
                   <TableCell className="text-xs">{RAZAO_LABELS[ev.razao_restricao] ?? ev.razao_restricao}</TableCell>
                   <TableCell className="text-xs">{fmtMWh(ev.energia_restringida_mwh)}</TableCell>
@@ -107,6 +117,13 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
                   </TableCell>
                   <TableCell className="text-xs">{ev.elegivel_ressarcimento ? fmtBRL(ev.valor_potencial_reais) : "—"}</TableCell>
                   <TableCell className="text-xs">{ev.valor_ressarcivel_pos_franquia_reais > 0 ? fmtBRL(ev.valor_ressarcivel_pos_franquia_reais) : "—"}</TableCell>
+                  <TableCell>
+                    {ev.valor_ressarcivel_pos_franquia_reais > 0 ? (
+                      <Badge className="bg-emerald-600 hover:bg-emerald-600">Excedente ressarcível</Badge>
+                    ) : (
+                      <Badge variant="secondary">Dentro da franquia</Badge>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <SourceBadge
                       fonte={ev.classificacao_fonte}

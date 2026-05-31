@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTheme } from "@/components/theme-provider"
-import { useUsinas } from "@/hooks/useUsinas"
+import { useAllUsinas, useUsinas } from "@/hooks/useUsinas"
 import { fmtMW } from "@/lib/formatters"
 import { FONTES, SUBMERCADOS } from "@/lib/constants"
 import type { UsinaOut } from "@/types/usinas"
@@ -43,12 +43,17 @@ export default function Portfolio() {
   const [offset, setOffset] = useState(0)
   const LIMIT = 15
 
-  const { data, isLoading } = useUsinas({
+  const filters = {
     fonte: fonte !== "all" ? fonte : undefined,
     submercado: submercado !== "all" ? submercado : undefined,
+  }
+
+  const { data, isLoading } = useUsinas({
+    ...filters,
     limit: LIMIT,
     offset,
   })
+  const { data: allUsinas } = useAllUsinas(filters)
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -91,7 +96,7 @@ export default function Portfolio() {
           <div className="space-y-3">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
         ) : (
           <>
-            {data && data.items.length > 0 && <div className="mb-4"><PlantMap usinas={data.items} /></div>}
+            {allUsinas && allUsinas.length > 0 && <div className="mb-4"><PlantMap usinas={allUsinas} /></div>}
             <table className="w-full">
             <thead>
               <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">

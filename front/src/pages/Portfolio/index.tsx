@@ -10,6 +10,7 @@ import { useUsinas } from "@/hooks/useUsinas"
 import { fmtMW } from "@/lib/formatters"
 import { FONTES, SUBMERCADOS } from "@/lib/constants"
 import type { UsinaOut } from "@/types/usinas"
+import { PlantMap } from "./PlantMap"
 
 function PlantRow({ usina }: { usina: UsinaOut }) {
   const navigate = useNavigate()
@@ -38,7 +39,7 @@ function PlantRow({ usina }: { usina: UsinaOut }) {
 export default function Portfolio() {
   const { theme, setTheme } = useTheme()
   const [fonte, setFonte] = useState("all")
-  const [submercado, setSubmercado] = useState("all")
+  const [submercado, setSubmercado] = useState("NE")
   const [offset, setOffset] = useState(0)
   const LIMIT = 15
 
@@ -89,7 +90,9 @@ export default function Portfolio() {
         {isLoading ? (
           <div className="space-y-3">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
         ) : (
-          <table className="w-full">
+          <>
+            {data && data.items.length > 0 && <div className="mb-4"><PlantMap usinas={data.items} /></div>}
+            <table className="w-full">
             <thead>
               <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
                 <th className="pb-2 pr-4 font-medium">Usina</th>
@@ -102,6 +105,7 @@ export default function Portfolio() {
               {data?.items.map((u) => <PlantRow key={u.usina_id} usina={u} />)}
             </tbody>
           </table>
+          </>
         )}
 
         {data && data.total_count > LIMIT && (

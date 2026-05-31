@@ -62,6 +62,11 @@ class RegulatorioService:
         eventos_sem_razao_original = 0
         eventos_com_razao_normalizada = 0
 
+        fonte_usina = usina.get("fonte")
+        ano_base = inicio.year
+        franquia_horas_ano = self.financeiro_service.policy.franquia_horas(fonte_usina, ano_base)
+        horas_elegiveis_no_periodo = 0.0
+
         for e in eventos:
             razao_original = e.razao_restricao or e.cod_razaorestricao
             razao = self.policy.normalize_razao(razao_original)
@@ -93,6 +98,8 @@ class RegulatorioService:
                 preco = 0.0
             valor = energia * preco if elegivel else 0.0
             total_potencial += valor
+            if elegivel and energia > 0:
+                horas_elegiveis_no_periodo += 1.0
 
             itens.append(
                 {
@@ -101,6 +108,8 @@ class RegulatorioService:
                     "energia_restringida_mwh": round(energia, 4),
                     "elegivel_ressarcimento": elegivel,
                     "valor_potencial_reais": round(valor, 2),
+                    "valor_ressarcivel_pos_franquia_reais": 0.0,
+                    "dentro_franquia": bool(elegivel),
                     "classificacao_fonte": fonte_classificacao,
                     "classificacao_confianca": round(confianca, 4),
                     "classificacao_justificativa": justificativa,
@@ -113,9 +122,34 @@ class RegulatorioService:
             else "parcial"
         )
 
+        # Aplica franquia anual por fonte (MVP: contabiliza horas elegíveis no período)
+        horas_excedentes_franquia_no_periodo = max(0.0, horas_elegiveis_no_periodo - franquia_horas_ano)
+        horas_restantes_dentro_franquia = min(horas_elegiveis_no_periodo, franquia_horas_ano)
+
+        total_ressarcivel_pos_franquia = 0.0
+        for item in sorted(itens, key=lambda x: x["timestamp"]):
+            if not item["elegivel_ressarcimento"] or item["energia_restringida_mwh"] <= 0:
+                item["dentro_franquia"] = False
+                item["valor_ressarcivel_pos_franquia_reais"] = 0.0
+                continue
+
+            if horas_restantes_dentro_franquia > 0:
+                item["dentro_franquia"] = True
+                item["valor_ressarcivel_pos_franquia_reais"] = 0.0
+                horas_restantes_dentro_franquia -= 1.0
+            else:
+                item["dentro_franquia"] = False
+                val = float(item["valor_potencial_reais"])
+                item["valor_ressarcivel_pos_franquia_reais"] = round(val, 2)
+                total_ressarcivel_pos_franquia += val
+
         out = {
             "usina_id": usina_id,
             "total_potencial_ressarcivel_reais": round(total_potencial, 2),
+            "total_ressarcivel_pos_franquia_reais": round(total_ressarcivel_pos_franquia, 2),
+            "franquia_horas_ano": round(franquia_horas_ano, 2),
+            "horas_elegiveis_no_periodo": round(horas_elegiveis_no_periodo, 2),
+            "horas_excedentes_franquia_no_periodo": round(horas_excedentes_franquia_no_periodo, 2),
             "qualidade_classificacao": {
                 "eventos_totais": len(eventos),
                 "eventos_classificados_por_ia": classificados_por_ia,

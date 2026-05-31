@@ -9,6 +9,8 @@ class ElegibilidadeEventoOut(BaseModel):
     energia_restringida_mwh: float
     elegivel_ressarcimento: bool
     valor_potencial_reais: float
+    valor_ressarcivel_pos_franquia_reais: float
+    dentro_franquia: bool
     classificacao_fonte: str
     classificacao_confianca: float
     classificacao_justificativa: str
@@ -31,6 +33,10 @@ class QualidadeDadosRegulatorioOut(BaseModel):
 class ElegibilidadeOut(BaseModel):
     usina_id: str
     total_potencial_ressarcivel_reais: float
+    total_ressarcivel_pos_franquia_reais: float
+    franquia_horas_ano: float
+    horas_elegiveis_no_periodo: float
+    horas_excedentes_franquia_no_periodo: float
     qualidade_classificacao: QualidadeClassificacaoOut
     qualidade_dados: QualidadeDadosRegulatorioOut
     metadata: MetaOut

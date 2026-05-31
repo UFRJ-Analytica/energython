@@ -6,6 +6,7 @@ from app.agents.dossier_agent import DossierAgent
 from app.agents.rag_agent import RagAgent
 from app.repositories.mock_repo import MockRepository
 from app.services.regulatorio_service import RegulatorioService
+from app.domain.policies import FinanceiroPolicy
 
 
 class FakeLLM:
@@ -43,6 +44,12 @@ class TestRegulatorioService(unittest.TestCase):
         self.assertEqual(out["metadata"]["mvp_scope"], "geradoras_renovaveis_submercado_ne")
         self.assertEqual(out["metadata"]["api_contract_version"], "v1")
         self.assertIn("status", out["qualidade_dados"])
+        self.assertIn("total_ressarcivel_pos_franquia_reais", out)
+        self.assertIn("franquia_horas_ano", out)
+        self.assertIn("horas_elegiveis_no_periodo", out)
+        self.assertIn("horas_excedentes_franquia_no_periodo", out)
+        self.assertIn("valor_ressarcivel_pos_franquia_reais", out["eventos"][0])
+        self.assertIn("dentro_franquia", out["eventos"][0])
 
     def test_classificador_so_em_caso_ambiguo(self):
         out = self.svc.classificar_eventos(
@@ -81,12 +88,19 @@ class TestRegulatorioService(unittest.TestCase):
             },
             cache=__import__("app.utils.simple_cache", fromlist=["TTLCache"]).TTLCache(ttl_seconds=3600),
         )
+        svc.financeiro_service.policy = FinanceiroPolicy(
+            franquia_horas_por_fonte_ano={"eolica": {2026: 1.0}, "solar": {2026: 1.0}},
+        )
         out = svc.classificar_eventos(
             "USI_NE_001",
             datetime.fromisoformat("2026-05-01T00:00:00"),
             datetime.fromisoformat("2026-05-02T00:00:00"),
         )
         self.assertEqual(out["total_potencial_ressarcivel_reais"], 6750.0)
+        self.assertEqual(out["franquia_horas_ano"], 1.0)
+        self.assertEqual(out["horas_elegiveis_no_periodo"], 2.0)
+        self.assertEqual(out["horas_excedentes_franquia_no_periodo"], 1.0)
+        self.assertLess(out["total_ressarcivel_pos_franquia_reais"], out["total_potencial_ressarcivel_reais"])
 
     def test_gerar_dossie(self):
         out = self.svc.gerar_dossie(

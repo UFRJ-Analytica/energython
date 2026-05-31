@@ -45,10 +45,33 @@ class RegulatorioPolicy:
 @dataclass(frozen=True)
 class FinanceiroPolicy:
     metodo_exposicao: str = "media_historica_30_dias"
+    franquia_horas_por_fonte_ano: dict[str, dict[int, float]] | None = None
 
     @classmethod
     def default(cls) -> "FinanceiroPolicy":
-        return cls()
+        return cls(
+            franquia_horas_por_fonte_ano={
+                "eolica": {2025: 82.0},
+                "solar": {2025: 41.0},
+                "fotovoltaica": {2025: 41.0},
+            }
+        )
+
+    def normalize_fonte(self, fonte: str | None) -> str:
+        if not fonte:
+            return "desconhecida"
+        v = str(fonte).strip().lower()
+        if "eol" in v:
+            return "eolica"
+        if "fotov" in v or "solar" in v:
+            return "solar"
+        return v
+
+    def franquia_horas(self, fonte: str | None, ano: int) -> float:
+        tabela = self.franquia_horas_por_fonte_ano or {}
+        chave = self.normalize_fonte(fonte)
+        por_ano = tabela.get(chave, {})
+        return float(por_ano.get(int(ano), 0.0) or 0.0)
 
     def classificar_status_qualidade_perda(self, pld_faltante_eventos: int, total_pld_rows: int) -> str:
         if pld_faltante_eventos == 0:

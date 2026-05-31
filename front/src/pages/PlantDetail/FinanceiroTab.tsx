@@ -4,6 +4,7 @@ import { KpiCard } from "@/components/shared/KpiCard"
 import { DataQualityBanner } from "@/components/shared/DataQualityBanner"
 import { ErrorState } from "@/components/shared/ErrorState"
 import { LossBreakdownChart } from "@/components/charts/LossBreakdownChart"
+import { LossTimelineChart } from "@/components/charts/LossTimelineChart"
 import { BessSimulator } from "./BessSimulator"
 import { useExposicao, usePerda } from "@/hooks/useFinanceiro"
 import { fmtBRL, fmtMWh } from "@/lib/formatters"
@@ -39,6 +40,16 @@ export function FinanceiroTab({ usinaId, inicio, fim }: Props) {
         </CardHeader>
         <CardContent>
           <LossBreakdownChart porRazao={data.por_razao} />
+        </CardContent>
+      </Card>
+
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Perda temporal com PLD</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <LossTimelineChart serie={data.serie} />
         </CardContent>
       </Card>
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useParams } from "react-router-dom"
 import { subDays } from "date-fns"
 import { Zap } from "lucide-react"
@@ -46,19 +46,27 @@ export default function Simulador() {
   const main = useBessSimular(id!, inicio, fim)
   const preset0 = useBessSimular(id!, inicio, fim)
   const preset1 = useBessSimular(id!, inicio, fim)
+  const lastPresetKeyRef = useRef<string>("")
 
   const runMain = useCallback(() => {
     main.mutate({ potencia_mw: potencia, duracao_horas: duracao, eficiencia: eficiencia / 100, capex: capex ? Number(capex) : undefined })
   }, [main, potencia, duracao, eficiencia, capex])
 
+  const runPresetComparacao = useCallback(() => {
+    const k = `${inicio}|${fim}`
+    if (lastPresetKeyRef.current === k) return
+    lastPresetKeyRef.current = k
+    preset0.mutate(PRESETS[0])
+    preset1.mutate(PRESETS[1])
+  }, [inicio, fim, preset0, preset1])
+
   useEffect(() => {
-    const t = setTimeout(runMain, 500)
-    return () => clearTimeout(t)
+    // Não executa simulação principal automaticamente para evitar rajadas de requests.
+    // Usuário dispara manualmente ao clicar em "Simular cenário".
   }, [potencia, duracao, eficiencia, capex, inicio, fim])
 
   useEffect(() => {
-    preset0.mutate(PRESETS[0])
-    preset1.mutate(PRESETS[1])
+    // Comparação de presets também é manual (botão) para não duplicar chamadas em dev/StrictMode.
   }, [inicio, fim])
 
   useEffect(() => {
@@ -111,6 +119,15 @@ export default function Simulador() {
             <Label className="text-sm">CAPEX (R$) — opcional</Label>
             <Input type="number" value={capex} onChange={(e) => setCapex(e.target.value)} className="font-mono text-sm h-8" placeholder="120000000" />
           </div>
+
+          <button
+            type="button"
+            className="inline-flex h-9 items-center justify-center rounded-md bg-emerald-600 px-3 text-sm font-medium text-white hover:bg-emerald-500"
+            onClick={runMain}
+            disabled={main.isPending}
+          >
+            {main.isPending ? "Simulando cenário..." : "Simular cenário"}
+          </button>
         </div>
 
         {/* Resultado principal */}
@@ -141,7 +158,17 @@ export default function Simulador() {
 
       {/* Comparação de cenários */}
       <div className="mt-8">
-        <h3 className="mb-4 text-sm font-medium text-muted-foreground uppercase tracking-wide">Comparar cenários</h3>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Comparar cenários</h3>
+          <button
+            type="button"
+            className="inline-flex h-8 items-center justify-center rounded-md border border-border px-3 text-xs font-medium hover:bg-muted"
+            onClick={runPresetComparacao}
+            disabled={preset0.isPending || preset1.isPending}
+          >
+            {preset0.isPending || preset1.isPending ? "Calculando..." : "Rodar comparação"}
+          </button>
+        </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {PRESETS.map((p, i) =>
             presetResults[i] ? (

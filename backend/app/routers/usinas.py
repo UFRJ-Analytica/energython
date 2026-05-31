@@ -47,6 +47,7 @@ def resumo_usina(
     usina_id: str,
     inicio: str | None = Query(default=None),
     fim: str | None = Query(default=None),
+    incluir_risco: bool = Query(default=False),
     repo: BaseRepository = Depends(get_repo),
     financeiro=Depends(get_financeiro_service),
     regulatorio=Depends(get_regulatorio_service),
@@ -66,13 +67,22 @@ def resumo_usina(
             raise api_error(422, "parametro_data_invalido", str(exc))
 
     perda = financeiro.calcular_perda(usina_id, inicio_dt, fim_dt)
-    eleg = regulatorio.classificar_eventos(usina_id, inicio_dt, fim_dt, usar_ia_classificacao=False)
-    risco = curtailment.prever_risco(usina_id, horizonte_horas=48)
 
     total_perda = perda["total_perda_reais"]
     total_eventos = len(perda["serie"])
     ticket_medio = (total_perda / total_eventos) if total_eventos else 0.0
-    perc_ress = (eleg["total_potencial_ressarcivel_reais"] / total_perda * 100.0) if total_perda > 0 else 0.0
+
+    total_elegivel_est = 0.0
+    for razao, valor in perda.get("por_razao", {}).items():
+        razao_norm = regulatorio.policy.normalize_razao(razao)
+        if regulatorio.policy.is_elegivel(razao_norm):
+            total_elegivel_est += float(valor or 0.0)
+    perc_ress = (total_elegivel_est / total_perda * 100.0) if total_perda > 0 else 0.0
+
+    risco_previsoes = []
+    if incluir_risco:
+        risco = curtailment.prever_risco(usina_id, horizonte_horas=48)
+        risco_previsoes = risco.get("previsoes", [])
 
     return {
         "usina": usina,
@@ -87,5 +97,5 @@ def resumo_usina(
             "api_contract_version": "v1",
             "data_quality_status": perda["qualidade_dados"]["status"],
         },
-        "risco_48h": risco["previsoes"],
+        "risco_48h": risco_previsoes,
     }

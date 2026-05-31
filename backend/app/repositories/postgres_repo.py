@@ -123,7 +123,15 @@ class PostgresRepository(BaseRepository):
                 FROM base
                 WHERE (:ne_only = false OR submercado = 'NE')
             )
-            SELECT usina_id, nome, fonte, potencia_mw, submercado, latitude, longitude, garantia_fisica_mwm
+            SELECT
+                usina_id,
+                nome,
+                fonte,
+                COALESCE(potencia_mw, 0)::double precision AS potencia_mw,
+                submercado,
+                latitude,
+                longitude,
+                garantia_fisica_mwm
             FROM ranked
             WHERE rn = 1
             ORDER BY nome
@@ -204,7 +212,7 @@ class PostgresRepository(BaseRepository):
                 id_ons AS usina_id,
                 nom_usina AS nome,
                 COALESCE(nom_tipocombustivel, nom_tipousina, 'desconhecida') AS fonte,
-                NULL::double precision AS potencia_mw,
+                0::double precision AS potencia_mw,
                 CASE
                     WHEN UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') THEN 'NE'
                     WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'

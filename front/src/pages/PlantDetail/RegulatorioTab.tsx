@@ -24,6 +24,7 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
   const { data, isLoading, error } = useElegibilidade(usinaId, inicio, fim)
   const fluxo = useFluxoRessarcimento(usinaId)
   const [franquiaInput, setFranquiaInput] = useState<string>("")
+  const [statusFilter, setStatusFilter] = useState<"todos" | "dentro_franquia" | "excedente">("todos")
 
   const franquiaOverride = useMemo(() => {
     const value = Number(franquiaInput)
@@ -32,6 +33,12 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
 
   const effective = fluxo.data?.resultado_elegibilidade ?? data
   const isRefreshing = fluxo.isPending
+  const filteredEventos = useMemo(() => {
+    if (!effective) return []
+    if (statusFilter === "todos") return effective.eventos
+    if (statusFilter === "excedente") return effective.eventos.filter((ev) => ev.valor_ressarcivel_pos_franquia_reais > 0)
+    return effective.eventos.filter((ev) => ev.valor_ressarcivel_pos_franquia_reais <= 0)
+  }, [effective, statusFilter])
 
   const handleExecutarFluxo = () => {
     fluxo.mutate({
@@ -84,9 +91,14 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">Eventos de elegibilidade</CardTitle>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Badge variant="secondary">Dentro da franquia</Badge>
             <Badge className="bg-emerald-600 hover:bg-emerald-600">Excedente ressarcível</Badge>
+            <div className="ml-2 flex items-center gap-2">
+              <Button size="sm" variant={statusFilter === "todos" ? "default" : "outline"} onClick={() => setStatusFilter("todos")}>Todos</Button>
+              <Button size="sm" variant={statusFilter === "dentro_franquia" ? "default" : "outline"} onClick={() => setStatusFilter("dentro_franquia")}>Dentro da franquia</Button>
+              <Button size="sm" variant={statusFilter === "excedente" ? "default" : "outline"} onClick={() => setStatusFilter("excedente")}>Excedente</Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -104,7 +116,7 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {effective.eventos.map((ev, i) => (
+              {filteredEventos.map((ev, i) => (
                 <TableRow
                   key={`${ev.timestamp}-${i}`}
                   className={ev.valor_ressarcivel_pos_franquia_reais > 0 ? "bg-emerald-50/60 dark:bg-emerald-950/20" : ""}
@@ -133,6 +145,13 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
                   </TableCell>
                 </TableRow>
               ))}
+              {filteredEventos.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-6 text-center text-sm text-muted-foreground">
+                    Nenhum evento encontrado para o filtro selecionado.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

@@ -211,19 +211,6 @@ Uso: Mapas interativos, agregações por região
 
 ---
 
-## 📋 CHECKLIST FINAL
-
-- [ ] Leu README.md
-- [ ] Executou etl_unificado.py (teste ou completo)
-- [ ] Verificou arquivos em lake/silver/
-- [ ] Verificou agregações em lake/agg/
-- [ ] Implementou Backend (FastAPI)
-- [ ] Implementou Frontend (React)
-- [ ] Testou API com curl
-- [ ] Testou Dashboard no navegador
-- [ ] Agendou ETL (cron, airflow, etc)
-
----
 
 ## 📞 SUPORTE RÁPIDO
 

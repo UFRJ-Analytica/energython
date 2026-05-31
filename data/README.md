@@ -260,11 +260,7 @@ python -c "import pandas as pd; df = pd.read_parquet('/home/juan/Desktop/ons_dat
 pip install pyarrow
 ```
 
-### Problema: "Conexão recusada ao PostgreSQL"
-```bash
-# Testar conectividade
-psql -h 177.7.55.100 -p 32775 -U analytica -d hacka-energinn -c "SELECT 1"
-```
+
 
 ### Problema: "Sem espaço em disco"
 ```bash

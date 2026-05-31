@@ -276,9 +276,39 @@ class PostgresRepository(BaseRepository):
           AND timestamp BETWEEN :inicio AND :fim
         ORDER BY timestamp
         """
-        return self._safe_mappings_query(
+        rows = self._safe_mappings_query(
             sql,
             {"submercado": submercado, "inicio": inicio, "fim": fim},
+        )
+        if rows:
+            return rows
+
+        submercado_norm = (submercado or "").upper()
+        submercado_public = {
+            "NE": "NORDESTE",
+            "N": "NORTE",
+            "SE": "SUDESTE",
+            "S": "SUL",
+        }.get(submercado_norm, submercado_norm)
+
+        sql_public = """
+        WITH pld_norm AS (
+            SELECT
+                to_timestamp(mes_referencia || LPAD(dia, 2, '0') || LPAD(hora, 2, '0'), 'YYYYMMDDHH24') AS timestamp,
+                UPPER(submercado) AS submercado,
+                NULLIF(REPLACE(pld_hora, ',', '.'), '')::double precision AS pld_reais_mwh
+            FROM public.ccee_pld_horario
+            WHERE UPPER(submercado) = :submercado_public
+        )
+        SELECT timestamp, submercado, pld_reais_mwh
+        FROM pld_norm
+        WHERE timestamp BETWEEN :inicio AND :fim
+          AND pld_reais_mwh IS NOT NULL
+        ORDER BY timestamp
+        """
+        return self._safe_mappings_query(
+            sql_public,
+            {"submercado_public": submercado_public, "inicio": inicio, "fim": fim},
         )
 
     def get_geracao_horaria(self, usina_id: str, inicio: datetime, fim: datetime):

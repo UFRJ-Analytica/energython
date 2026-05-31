@@ -14,6 +14,9 @@ class ElegibilidadeEventoOut(BaseModel):
     classificacao_fonte: str
     classificacao_confianca: float
     classificacao_justificativa: str
+    auditoria_regra: str
+    auditoria_motivo_status: str
+    auditoria_detalhe: str
 
 
 class QualidadeClassificacaoOut(BaseModel):
@@ -52,6 +55,21 @@ class DossieIn(BaseModel):
 class DossieOut(BaseModel):
     usina_id: str
     dossie_markdown: str
+
+
+class DossieExportIn(BaseModel):
+    inicio: str
+    fim: str
+    formato: str = "markdown"
+    franquia_horas_override: float | None = None
+
+
+class DossieExportOut(BaseModel):
+    usina_id: str
+    formato: str
+    file_name: str
+    content_type: str
+    content: str
 
 
 class FluxoRessarcimentoIn(BaseModel):

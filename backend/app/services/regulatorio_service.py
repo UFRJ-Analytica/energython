@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
 from app.domain.contracts import parse_constrained_off, parse_pld
@@ -101,6 +102,7 @@ class RegulatorioService:
 
             elegivel = self.policy.is_elegivel(razao)
             energia = e.energia_restringida_mwh
+            regra_aplicada = f"razao={razao};elegivel={str(elegivel).lower()}"
             preco = pld_map.get(str(e.timestamp))
             if preco is None:
                 preco = pld_map_hora.get(_ts_hour_key(e.timestamp))
@@ -124,6 +126,21 @@ class RegulatorioService:
                     "classificacao_fonte": fonte_classificacao,
                     "classificacao_confianca": round(confianca, 4),
                     "classificacao_justificativa": justificativa,
+                    "auditoria_regra": regra_aplicada,
+                    "auditoria_motivo_status": (
+                        "nao_elegivel_razao"
+                        if not elegivel
+                        else ("sem_pld" if preco == 0 else "pendente_aplicar_franquia")
+                    ),
+                    "auditoria_detalhe": (
+                        "evento inelegível pelas regras vigentes"
+                        if not elegivel
+                        else (
+                            "evento elegível sem PLD horário disponível (valorado em 0)"
+                            if preco == 0
+                            else "evento elegível aguardando aplicação de franquia"
+                        )
+                    ),
                 }
             )
 
@@ -142,16 +159,23 @@ class RegulatorioService:
             if not item["elegivel_ressarcimento"] or item["energia_restringida_mwh"] <= 0:
                 item["dentro_franquia"] = False
                 item["valor_ressarcivel_pos_franquia_reais"] = 0.0
+                if item["elegivel_ressarcimento"] and item["energia_restringida_mwh"] <= 0:
+                    item["auditoria_motivo_status"] = "energia_zerada"
+                    item["auditoria_detalhe"] = "evento elegível com energia restringida <= 0"
                 continue
 
             if horas_restantes_dentro_franquia > 0:
                 item["dentro_franquia"] = True
                 item["valor_ressarcivel_pos_franquia_reais"] = 0.0
+                item["auditoria_motivo_status"] = "dentro_franquia"
+                item["auditoria_detalhe"] = "evento elegível absorvido pela franquia anual"
                 horas_restantes_dentro_franquia -= 1.0
             else:
                 item["dentro_franquia"] = False
                 val = float(item["valor_potencial_reais"])
                 item["valor_ressarcivel_pos_franquia_reais"] = round(val, 2)
+                item["auditoria_motivo_status"] = "ressarcivel_excedente_franquia"
+                item["auditoria_detalhe"] = "evento elegível excedeu franquia anual e foi valorado"
                 total_ressarcivel_pos_franquia += val
 
         out = {
@@ -239,6 +263,53 @@ class RegulatorioService:
                 "fluxo": "agente_ressarcimento",
             },
         }
+
+    def exportar_dossie(
+        self,
+        usina_id: str,
+        inicio: datetime,
+        fim: datetime,
+        formato: str = "markdown",
+        franquia_horas_override: float | None = None,
+    ) -> dict:
+        fluxo = self.executar_fluxo_ressarcimento(
+            usina_id=usina_id,
+            inicio=inicio,
+            fim=fim,
+            franquia_horas_override=franquia_horas_override,
+        )
+        formato_norm = (formato or "markdown").strip().lower()
+        inicio_tag = inicio.strftime("%Y%m%dT%H%M%S")
+        fim_tag = fim.strftime("%Y%m%dT%H%M%S")
+
+        if formato_norm in {"md", "markdown"}:
+            return {
+                "usina_id": usina_id,
+                "formato": "markdown",
+                "file_name": f"dossie_{usina_id}_{inicio_tag}_{fim_tag}.md",
+                "content_type": "text/markdown; charset=utf-8",
+                "content": fluxo["dossie_markdown"],
+            }
+
+        if formato_norm == "json":
+            payload = {
+                "usina_id": fluxo["usina_id"],
+                "periodo": fluxo["periodo"],
+                "selecao": fluxo["selecao"],
+                "resultado_elegibilidade": fluxo["resultado_elegibilidade"],
+                "human_in_the_loop": fluxo["human_in_the_loop"],
+                "metadata": fluxo["metadata"],
+                "dossie_markdown": fluxo["dossie_markdown"],
+            }
+            return {
+                "usina_id": usina_id,
+                "formato": "json",
+                "file_name": f"dossie_{usina_id}_{inicio_tag}_{fim_tag}.json",
+                "content_type": "application/json",
+                "content": json.dumps(payload, ensure_ascii=False, indent=2),
+            }
+
+        raise ValueError("formato_exportacao_invalido")
 
     def consultar_regra(self, pergunta: str) -> dict:
         return self.rag_agent.consultar(pergunta)

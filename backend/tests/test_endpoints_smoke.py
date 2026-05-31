@@ -88,6 +88,48 @@ class TestEndpointsSmoke(unittest.TestCase):
         self.assertIn("human_in_the_loop", body)
         self.assertFalse(body["human_in_the_loop"]["submissao_automatica_habilitada"])
 
+    def test_export_dossie_markdown(self):
+        r = self.client.post(
+            "/api/usinas/USI_NE_001/dossie/export",
+            json={
+                "inicio": "2026-05-01T00:00:00",
+                "fim": "2026-05-02T00:00:00",
+                "formato": "markdown",
+            },
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["formato"], "markdown")
+        self.assertTrue(body["file_name"].endswith(".md"))
+        self.assertIn("text/markdown", body["content_type"])
+
+    def test_export_dossie_json(self):
+        r = self.client.post(
+            "/api/usinas/USI_NE_001/dossie/export",
+            json={
+                "inicio": "2026-05-01T00:00:00",
+                "fim": "2026-05-02T00:00:00",
+                "formato": "json",
+            },
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["formato"], "json")
+        self.assertTrue(body["file_name"].endswith(".json"))
+        self.assertEqual(body["content_type"], "application/json")
+
+    def test_export_dossie_formato_invalido(self):
+        r = self.client.post(
+            "/api/usinas/USI_NE_001/dossie/export",
+            json={
+                "inicio": "2026-05-01T00:00:00",
+                "fim": "2026-05-02T00:00:00",
+                "formato": "xml",
+            },
+        )
+        self.assertEqual(r.status_code, 422)
+        self.assertEqual(r.json()["detail"]["code"], "formato_exportacao_invalido")
+
 
 if __name__ == "__main__":
     unittest.main()

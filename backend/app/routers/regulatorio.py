@@ -4,6 +4,8 @@ from app.deps import get_regulatorio_service
 from app.schemas.regulatorio import (
     ConsultaRegulatoriaIn,
     ConsultaRegulatoriaOut,
+    DossieExportIn,
+    DossieExportOut,
     DossieIn,
     DossieOut,
     ElegibilidadeOut,
@@ -46,6 +48,25 @@ def dossie(usina_id: str, body: DossieIn, service=Depends(get_regulatorio_servic
     except DateRangeError as exc:
         raise api_error(422, "parametro_data_invalido", str(exc))
     except ValueError:
+        raise api_error(404, "usina_nao_encontrada", "Usina não encontrada")
+
+
+@router.post("/usinas/{usina_id}/dossie/export", response_model=DossieExportOut)
+def exportar_dossie(usina_id: str, body: DossieExportIn, service=Depends(get_regulatorio_service)):
+    try:
+        i, f = parse_range(body.inicio, body.fim)
+        return service.exportar_dossie(
+            usina_id=usina_id,
+            inicio=i,
+            fim=f,
+            formato=body.formato,
+            franquia_horas_override=body.franquia_horas_override,
+        )
+    except DateRangeError as exc:
+        raise api_error(422, "parametro_data_invalido", str(exc))
+    except ValueError as exc:
+        if str(exc) == "formato_exportacao_invalido":
+            raise api_error(422, "formato_exportacao_invalido", "Formato deve ser 'markdown' ou 'json'")
         raise api_error(404, "usina_nao_encontrada", "Usina não encontrada")
 
 

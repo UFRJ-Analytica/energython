@@ -1,3 +1,4 @@
+import json
 import unittest
 from datetime import datetime
 
@@ -50,6 +51,9 @@ class TestRegulatorioService(unittest.TestCase):
         self.assertIn("horas_excedentes_franquia_no_periodo", out)
         self.assertIn("valor_ressarcivel_pos_franquia_reais", out["eventos"][0])
         self.assertIn("dentro_franquia", out["eventos"][0])
+        self.assertIn("auditoria_regra", out["eventos"][0])
+        self.assertIn("auditoria_motivo_status", out["eventos"][0])
+        self.assertIn("auditoria_detalhe", out["eventos"][0])
 
     def test_classificador_so_em_caso_ambiguo(self):
         out = self.svc.classificar_eventos(
@@ -131,6 +135,32 @@ class TestRegulatorioService(unittest.TestCase):
         self.assertIn("dossie_markdown", out)
         self.assertFalse(out["human_in_the_loop"]["submissao_automatica_habilitada"])
         self.assertEqual(out["resultado_elegibilidade"]["franquia_horas_ano"], 1.0)
+
+    def test_exportar_dossie_markdown(self):
+        out = self.svc.exportar_dossie(
+            "USI_NE_001",
+            datetime.fromisoformat("2026-05-01T00:00:00"),
+            datetime.fromisoformat("2026-05-02T00:00:00"),
+            formato="markdown",
+        )
+        self.assertEqual(out["formato"], "markdown")
+        self.assertTrue(out["file_name"].endswith(".md"))
+        self.assertIn("text/markdown", out["content_type"])
+        self.assertTrue(out["content"].startswith("# Dossiê"))
+
+    def test_exportar_dossie_json(self):
+        out = self.svc.exportar_dossie(
+            "USI_NE_001",
+            datetime.fromisoformat("2026-05-01T00:00:00"),
+            datetime.fromisoformat("2026-05-02T00:00:00"),
+            formato="json",
+        )
+        self.assertEqual(out["formato"], "json")
+        self.assertTrue(out["file_name"].endswith(".json"))
+        self.assertEqual(out["content_type"], "application/json")
+        payload = json.loads(out["content"])
+        self.assertEqual(payload["usina_id"], "USI_NE_001")
+        self.assertIn("resultado_elegibilidade", payload)
 
 
 if __name__ == "__main__":

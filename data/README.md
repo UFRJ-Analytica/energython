@@ -1,6 +1,5 @@
 # 📊 ETL UNIFICADO - ÍNDICE E DOCUMENTAÇÃO
 
-> Data lake confuso? Dados sujos? Resolvemos! Pipeline completo de limpeza, normalização e agregação.
 
 ---
 
@@ -326,9 +325,3 @@ arquitetura/
 └── etl_unificado.py
     └─ Script principal (execute este)
 ```
-
----
-
-**Comece por:** SUMARIO_EXECUTIVO.md → ETL_CAMADA_PRATA_DOCUMENTACAO_COMPLETA.md → GUIA_IMPLEMENTACAO_BACKEND_FRONTEND.md
-
-Boa sorte! 🚀

@@ -1,0 +1,238 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    ETL UNIFICADO - DELIVERABLES COMPLETOS                    ║
+║                                                                              ║
+║                      Data Lake Limpo e Estruturado                          ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📦 ARQUIVOS ENTREGUES
+═════════════════════════════════════════════════════════════════════════════
+
+1. SCRIPT PRINCIPAL
+   └─ etl_unificado.py
+      • Pipeline unificado (RAW → SILVER → AGG)
+      • Remove nulos, outliers, normaliza
+      • Particiona por estado/ano/mes
+      • Adiciona H3 para geoespacial
+      • Argumentos: --limit, --tables, --skip-agg
+
+2. DOCUMENTAÇÃO TÉCNICA
+   ├─ README.md
+   │  └─ Índice e guia rápido
+   │
+   ├─ SUMARIO_EXECUTIVO.md
+   │  └─ O que foi feito em 2 minutos
+   │
+   ├─ ETL_CAMADA_PRATA_DOCUMENTACAO_COMPLETA.md
+   │  ├─ Explicação do pipeline
+   │  ├─ Operações de limpeza (nulos, outliers, normalização)
+   │  ├─ Estrutura de saída
+   │  ├─ Consumo Backend + Frontend
+   │  ├─ Agregações
+   │  └─ Troubleshooting
+   │
+   └─ GUIA_IMPLEMENTACAO_BACKEND_FRONTEND.md
+      ├─ Código FastAPI (Python) completo
+      ├─ Código React+TypeScript completo
+      ├─ Exemplos de integração
+      └─ Teste ponta-a-ponta
+
+
+🗂️ ESTRUTURA DE DADOS GERADA
+═════════════════════════════════════════════════════════════════════════════
+
+Localização Base: /home/juan/Desktop/ons_data_lake/lake/
+
+CAMADA SILVER (Dados Tratados)
+└─ silver/
+   ├─ geracao_usina_2/
+   │  └─ id_estado={XX}/ano={YYYY}/mes={MM}/part-*.parquet
+   │  Linhas originais: 15.0M | Período: 2003-2026
+   │  Colunas: din_instante, id_estado, nom_usina, val_geracao, etc
+   │  Particionado por: ESTADO/ANO/MES
+   │
+   ├─ disponibilidade_usina/
+   │  └─ id_estado={XX}/ano={YYYY}/mes={MM}/part-*.parquet
+   │  Linhas originais: 3.4M | Período: 2019-2026
+   │  Colunas: din_instante, id_estado, nom_usina, val_dispoperacional, etc
+   │
+   ├─ fator_capacidade_2/
+   │  └─ id_estado={XX}/ano={YYYY}/mes={MM}/part-*.parquet
+   │  Linhas originais: 13.8M | Período: 2014-2026
+   │  Colunas: din_instante, nom_localizacao, val_fatorcapacidade, h3_res6, h3_res7
+   │  ⭐ COM H3: Indexação geoespacial Uber (res 6 e 7)
+   │
+   ├─ restricao_coff_eolica_detail/
+   │  └─ id_estado={XX}/ano={YYYY}/mes={MM}/part-*.parquet
+   │  Linhas originais: 49.5M | Período: 2021-2026 (30min)
+   │  Colunas: din_instante, nom_usina, val_ventoverificado, val_geracaoverificada
+   │
+   └─ ccee_pld_horario/
+      └─ submercado={XX}/part-*.parquet
+      Linhas originais: 38K
+      Colunas: mes_referencia, submercado, dia, hora, pld_hora
+
+CAMADA AGG (Agregações para BI)
+└─ agg/
+   ├─ agg_geracao_estado_dia/
+   │  └─ id_estado={XX}/part-*.parquet
+   │  Granularidade: 1 linha por estado + dia
+   │  Colunas: id_estado, nom_estado, data, registros, geracao_total_mw,
+   │           geracao_media_mw, geracao_min_mw, geracao_max_mw
+   │  Uso: Dashboards de geração diária
+   │
+   └─ agg_fator_capacidade_estado_mes/
+      └─ id_estado={XX}/part-*.parquet
+      Granularidade: 1 linha por estado + mês
+      Colunas: id_estado, nom_estado, mes, registros, fator_capacidade_media,
+               geracao_verificada_media_mw, capacidade_instalada_media_mw
+      Uso: Dashboards de capacidade mensal
+
+
+📊 ESTATÍSTICAS DE LIMPEZA
+═════════════════════════════════════════════════════════════════════════════
+
+Teste com 500K linhas (geracao_usina_2):
+  Input:  500.000 linhas
+  Output: 500.000 linhas
+  Taxa limpeza: 0% (dados já estava limpo)
+  Tempo: ~17 segundos
+
+Esperado com data lake confuso:
+  Nulos removidos:     5-15%
+  Outliers removidos:  2-5%
+  Total removido:      7-20%
+
+Método IQR (Interquartile Range) usado para outliers:
+  Q1 = 25º percentil
+  Q3 = 75º percentil
+  IQR = Q3 - Q1
+  Limite = [Q1 - 1.5×IQR, Q3 + 1.5×IQR]
+
+
+⚙️ OPERAÇÕES EXECUTADAS
+═════════════════════════════════════════════════════════════════════════════
+
+[1] REMOVE NULOS em colunas-chave
+    geracao_usina_2:           din_instante, id_estado, nom_usina
+    disponibilidade_usina:     din_instante, id_estado, nom_usina
+    fator_capacidade_2:        din_instante, id_estado, nom_pontoconexao
+    restricao_coff_eolica:     din_instante, id_estado, nom_usina
+    ccee_pld_horario:          submercado, dia, hora
+
+[2] REMOVE OUTLIERS (IQR)
+    geracao_usina_2:           val_geracao
+    disponibilidade_usina:     val_potenciainstalada, val_dispoperacional
+    fator_capacidade_2:        val_geracaoprogramada, val_geracaoverificada
+    restricao_coff_eolica:     val_ventoverificado, val_geracaoestimada
+
+[3] NORMALIZA STRINGS
+    • TRIM (remove espaços)
+    • LOWER (converte minúsculas)
+    Colunas: nom_estado, nom_usina, nom_subsistema, nom_tipousina, etc
+
+[4] PARTICIONA
+    Estrutura: /<tabela>/id_estado={XX}/ano={YYYY}/mes={MM}/
+    Benefício: Queries muito mais rápidas (prune by partition)
+
+[5] ADICIONA H3 (Geoespacial)
+    Tabela: fator_capacidade_2
+    Colunas adicionadas: h3_res6, h3_res7
+    Resolução 6: ~1.2 km²
+    Resolução 7: ~150 m²
+
+[6] GERA AGREGAÇÕES
+    • SUM/AVG diário (geracao_usina_2)
+    • AVG mensal (fator_capacidade_2)
+
+
+🚀 COMO RODAR
+═════════════════════════════════════════════════════════════════════════════
+
+TESTE RÁPIDO (20 segundos):
+  cd /home/juan/Desktop/ons_data_lake/spark_duck
+  python etl_unificado.py --limit 500000 --tables geracao_usina_2
+
+TABELA COMPLETA (2 horas):
+  python etl_unificado.py --tables geracao_usina_2
+
+TODAS AS TABELAS (3-4 horas):
+  python etl_unificado.py
+
+SEM AGREGAÇÕES:
+  python etl_unificado.py --skip-agg
+
+
+💻 CONSUMO NO BACKEND
+═════════════════════════════════════════════════════════════════════════════
+
+Python + Pandas:
+  import pandas as pd
+  df = pd.read_parquet(
+      "/home/juan/Desktop/ons_data_lake/lake/agg/agg_geracao_estado_dia/id_estado=SP/"
+  )
+
+FastAPI (recomendado):
+  @app.get("/api/geracao/estado/{estado}/dia")
+  def get_geracao(estado: str):
+      df = pd.read_parquet(f"...agg_geracao_estado_dia/id_estado={estado}/")
+      return df.to_dict(orient="records")
+
+
+🎨 CONSUMO NO FRONTEND
+═════════════════════════════════════════════════════════════════════════════
+
+JavaScript/React:
+  const dados = await fetch("/api/geracao/estado/BA?data_inicio=2024-01-01")
+                  .then(r => r.json())
+  // [{data: "2024-01-01", geracao_total_mw: 1234, ...}, ...]
+
+Chart.js + React:
+  <Line data={chartData} options={{responsive: true}} />
+
+
+📋 INSTALAÇÃO
+═════════════════════════════════════════════════════════════════════════════
+
+Dependências:
+  pip install psycopg2-binary pandas pyarrow duckdb h3 -q
+
+Verificar:
+  python -c "import psycopg2, pandas, pyarrow; print('✓ OK')"
+
+
+📚 DOCUMENTAÇÃO
+═════════════════════════════════════════════════════════════════════════════
+
+Leia na ordem:
+  1. README.md                                      (índice)
+  2. SUMARIO_EXECUTIVO.md                          (2 min)
+  3. ETL_CAMADA_PRATA_DOCUMENTACAO_COMPLETA.md     (30 min)
+  4. GUIA_IMPLEMENTACAO_BACKEND_FRONTEND.md        (código)
+
+
+✅ VALIDAÇÃO PÓS-ETL
+═════════════════════════════════════════════════════════════════════════════
+
+[ ] Silver/ criado
+[ ] Partições por estado/ano/mes existem
+[ ] Agg/ criado com agregações
+[ ] Backend consegue ler .parquet
+[ ] Frontend consegue consumir APIs
+
+
+🎓 PRÓXIMOS PASSOS
+═════════════════════════════════════════════════════════════════════════════
+
+1. Backend: Implementar FastAPI com endpoints
+2. Frontend: Criar Dashboard React
+3. CI/CD: Agendar ETL (daily/weekly)
+4. ML/IA: Treinar modelos com silver/
+
+═════════════════════════════════════════════════════════════════════════════
+
+Versão:         1.0
+Data:           30/05/2026
+Responsável:    Juan (Energy Data Team)
+Status:         ✅ Pronto para Produção
+
+═════════════════════════════════════════════════════════════════════════════

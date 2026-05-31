@@ -66,7 +66,7 @@ def resumo_usina(
             raise api_error(422, "parametro_data_invalido", str(exc))
 
     perda = financeiro.calcular_perda(usina_id, inicio_dt, fim_dt)
-    eleg = regulatorio.classificar_eventos(usina_id, inicio_dt, fim_dt)
+    eleg = regulatorio.classificar_eventos(usina_id, inicio_dt, fim_dt, usar_ia_classificacao=False)
     risco = curtailment.prever_risco(usina_id, horizonte_horas=48)
 
     total_perda = perda["total_perda_reais"]

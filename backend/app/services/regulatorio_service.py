@@ -45,6 +45,7 @@ class RegulatorioService:
         inicio: datetime,
         fim: datetime,
         franquia_horas_override: float | None = None,
+        usar_ia_classificacao: bool = True,
     ) -> dict:
         cache_key = (
             f"classificar:{usina_id}:{inicio.isoformat()}:{fim.isoformat()}:"
@@ -90,7 +91,7 @@ class RegulatorioService:
             justificativa = "classificacao_gold"
             fonte_classificacao = "gold"
 
-            if not razao or razao not in self.regras_elegibilidade:
+            if (not razao or razao not in self.regras_elegibilidade) and usar_ia_classificacao:
                 pred = self.classifier_agent.classificar_evento(e)
                 razao = pred.get("razao", "indefinido")
                 confianca = float(pred.get("confianca", 0.0) or 0.0)
@@ -98,6 +99,11 @@ class RegulatorioService:
                 fonte_classificacao = "ia"
                 classificados_por_ia += 1
             else:
+                if not razao or razao not in self.regras_elegibilidade:
+                    razao = "indefinido"
+                    confianca = 0.0
+                    justificativa = "classificacao_ia_desabilitada"
+                    fonte_classificacao = "regra_default"
                 classificados_por_gold += 1
 
             elegivel = self.policy.is_elegivel(razao)

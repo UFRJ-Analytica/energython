@@ -72,6 +72,22 @@ class TestEndpointsSmoke(unittest.TestCase):
         self.assertEqual(body["paginacao_eventos"]["total_count"], 2)
         self.assertEqual(len(body["eventos"]), 1)
 
+    def test_fluxo_ressarcimento(self):
+        r = self.client.post(
+            "/api/usinas/USI_NE_001/ressarcimento",
+            json={
+                "inicio": "2026-05-01T00:00:00",
+                "fim": "2026-05-02T00:00:00",
+                "franquia_horas_override": 1,
+            },
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("resultado_elegibilidade", body)
+        self.assertIn("dossie_markdown", body)
+        self.assertIn("human_in_the_loop", body)
+        self.assertFalse(body["human_in_the_loop"]["submissao_automatica_habilitada"])
+
 
 if __name__ == "__main__":
     unittest.main()

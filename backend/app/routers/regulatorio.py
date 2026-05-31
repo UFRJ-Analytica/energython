@@ -7,6 +7,8 @@ from app.schemas.regulatorio import (
     DossieIn,
     DossieOut,
     ElegibilidadeOut,
+    FluxoRessarcimentoIn,
+    FluxoRessarcimentoOut,
 )
 from app.utils.datetime_utils import DateRangeError, parse_range
 from app.utils.http_errors import api_error
@@ -41,6 +43,22 @@ def dossie(usina_id: str, body: DossieIn, service=Depends(get_regulatorio_servic
     try:
         i, f = parse_range(body.inicio, body.fim)
         return service.gerar_dossie(usina_id, i, f)
+    except DateRangeError as exc:
+        raise api_error(422, "parametro_data_invalido", str(exc))
+    except ValueError:
+        raise api_error(404, "usina_nao_encontrada", "Usina não encontrada")
+
+
+@router.post("/usinas/{usina_id}/ressarcimento", response_model=FluxoRessarcimentoOut)
+def fluxo_ressarcimento(usina_id: str, body: FluxoRessarcimentoIn, service=Depends(get_regulatorio_service)):
+    try:
+        i, f = parse_range(body.inicio, body.fim)
+        return service.executar_fluxo_ressarcimento(
+            usina_id=usina_id,
+            inicio=i,
+            fim=f,
+            franquia_horas_override=body.franquia_horas_override,
+        )
     except DateRangeError as exc:
         raise api_error(422, "parametro_data_invalido", str(exc))
     except ValueError:

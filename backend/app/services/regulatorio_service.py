@@ -38,8 +38,17 @@ class RegulatorioService:
         self.financeiro_service = FinanceiroService(repo)
         self.cache = cache
 
-    def classificar_eventos(self, usina_id: str, inicio: datetime, fim: datetime) -> dict:
-        cache_key = f"classificar:{usina_id}:{inicio.isoformat()}:{fim.isoformat()}:{hash(frozenset(self.regras_elegibilidade.items()))}"
+    def classificar_eventos(
+        self,
+        usina_id: str,
+        inicio: datetime,
+        fim: datetime,
+        franquia_horas_override: float | None = None,
+    ) -> dict:
+        cache_key = (
+            f"classificar:{usina_id}:{inicio.isoformat()}:{fim.isoformat()}:"
+            f"{hash(frozenset(self.regras_elegibilidade.items()))}:frq={franquia_horas_override}"
+        )
         if self.cache:
             cached = self.cache.get(cache_key)
             if cached is not None:
@@ -65,6 +74,8 @@ class RegulatorioService:
         fonte_usina = usina.get("fonte")
         ano_base = inicio.year
         franquia_horas_ano = self.financeiro_service.policy.franquia_horas(fonte_usina, ano_base)
+        if franquia_horas_override is not None:
+            franquia_horas_ano = max(0.0, float(franquia_horas_override))
         horas_elegiveis_no_periodo = 0.0
 
         for e in eventos:
@@ -187,6 +198,47 @@ class RegulatorioService:
         if self.cache:
             self.cache.set(cache_key, out)
         return out
+
+    def executar_fluxo_ressarcimento(
+        self,
+        usina_id: str,
+        inicio: datetime,
+        fim: datetime,
+        franquia_horas_override: float | None = None,
+    ) -> dict:
+        eleg = self.classificar_eventos(
+            usina_id=usina_id,
+            inicio=inicio,
+            fim=fim,
+            franquia_horas_override=franquia_horas_override,
+        )
+        dossie_md = self.dossier_agent.gerar_dossie(eleg)
+        eleg = {
+            **eleg,
+            "paginacao_eventos": {
+                "total_count": len(eleg.get("eventos", [])),
+                "limit": len(eleg.get("eventos", [])),
+                "offset": 0,
+            },
+        }
+        return {
+            "usina_id": usina_id,
+            "periodo": {"inicio": inicio.isoformat(), "fim": fim.isoformat()},
+            "selecao": {
+                "fonte_eventos": "constrained_off",
+                "eventos_totais": len(eleg.get("eventos", [])),
+            },
+            "resultado_elegibilidade": eleg,
+            "dossie_markdown": dossie_md,
+            "human_in_the_loop": {
+                "submissao_automatica_habilitada": False,
+                "acao_recomendada": "revisar_e_exportar_dossie",
+            },
+            "metadata": {
+                "api_contract_version": "v1",
+                "fluxo": "agente_ressarcimento",
+            },
+        }
 
     def consultar_regra(self, pergunta: str) -> dict:
         return self.rag_agent.consultar(pergunta)

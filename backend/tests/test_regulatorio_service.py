@@ -119,6 +119,19 @@ class TestRegulatorioService(unittest.TestCase):
         _ = self.svc.gerar_dossie("USI_NE_001", inicio, fim)
         self.assertEqual(self.llm.calls, calls_after_first)
 
+    def test_executar_fluxo_ressarcimento(self):
+        out = self.svc.executar_fluxo_ressarcimento(
+            "USI_NE_001",
+            datetime.fromisoformat("2026-05-01T00:00:00"),
+            datetime.fromisoformat("2026-05-02T00:00:00"),
+            franquia_horas_override=1.0,
+        )
+        self.assertEqual(out["usina_id"], "USI_NE_001")
+        self.assertIn("resultado_elegibilidade", out)
+        self.assertIn("dossie_markdown", out)
+        self.assertFalse(out["human_in_the_loop"]["submissao_automatica_habilitada"])
+        self.assertEqual(out["resultado_elegibilidade"]["franquia_horas_ano"], 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

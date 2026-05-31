@@ -54,6 +54,22 @@ class DossieOut(BaseModel):
     dossie_markdown: str
 
 
+class FluxoRessarcimentoIn(BaseModel):
+    inicio: str
+    fim: str
+    franquia_horas_override: float | None = None
+
+
+class FluxoRessarcimentoOut(BaseModel):
+    usina_id: str
+    periodo: dict
+    selecao: dict
+    resultado_elegibilidade: ElegibilidadeOut
+    dossie_markdown: str
+    human_in_the_loop: dict
+    metadata: dict
+
+
 class ConsultaRegulatoriaIn(BaseModel):
     pergunta: str
 

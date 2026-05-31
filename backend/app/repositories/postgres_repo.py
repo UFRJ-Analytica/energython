@@ -240,6 +240,72 @@ class PostgresRepository(BaseRepository):
             return [dict(r) for r in rows]
         except (ProgrammingError, OperationalError):
             self.db.rollback()
+
+            # Fallback preferencial: tabelas COFF com código de razão explícito (CNF/ENE/REL)
+            sql_public_coff = """
+            WITH base AS (
+                SELECT
+                    id_ons AS usina_id,
+                    CASE
+                        WHEN pg_typeof(din_instante)::text LIKE 'timestamp%' THEN din_instante::timestamp
+                        ELSE to_timestamp(din_instante, 'YYYY-MM-DD HH24:MI:SS')
+                    END AS timestamp,
+                    nom_usina AS fonte,
+                    NULLIF(val_geracao, '')::double precision AS geracao_verificada_mwh,
+                    COALESCE(NULLIF(val_geracaoreferenciafinal, '')::double precision, NULLIF(val_geracaoreferencia, '')::double precision, 0) AS geracao_referencia_mwh,
+                    GREATEST(
+                        COALESCE(NULLIF(val_geracaoreferenciafinal, '')::double precision, NULLIF(val_geracaoreferencia, '')::double precision, 0)
+                        - COALESCE(NULLIF(val_geracao, '')::double precision, 0),
+                        0
+                    ) AS energia_restringida_mwh,
+                    cod_razaorestricao AS cod_razaorestricao,
+                    NULL::text AS razao_restricao,
+                    CASE
+                        WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('NE', 'NORDESTE') THEN 'NE'
+                        WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('N', 'NORTE') THEN 'N'
+                        ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
+                    END AS submercado
+                FROM public.restricao_coff_eolica_usi
+                WHERE id_ons = :usina_id
+
+                UNION ALL
+
+                SELECT
+                    id_ons AS usina_id,
+                    din_instante::timestamp AS timestamp,
+                    nom_usina AS fonte,
+                    COALESCE(val_geracao, 0)::double precision AS geracao_verificada_mwh,
+                    COALESCE(val_geracaoreferenciafinal, val_geracaoreferencia, 0)::double precision AS geracao_referencia_mwh,
+                    GREATEST(
+                        COALESCE(val_geracaoreferenciafinal, val_geracaoreferencia, 0)::double precision
+                        - COALESCE(val_geracao, 0)::double precision,
+                        0
+                    ) AS energia_restringida_mwh,
+                    cod_razaorestricao AS cod_razaorestricao,
+                    NULL::text AS razao_restricao,
+                    CASE
+                        WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('NE', 'NORDESTE') THEN 'NE'
+                        WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('N', 'NORTE') THEN 'N'
+                        ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
+                    END AS submercado
+                FROM public.restricao_coff_fotovoltaica
+                WHERE id_ons = :usina_id
+            )
+            SELECT usina_id, timestamp, fonte, geracao_verificada_mwh, geracao_referencia_mwh,
+                   energia_restringida_mwh, razao_restricao, cod_razaorestricao, submercado
+            FROM base
+            WHERE timestamp BETWEEN :inicio AND :fim
+              AND energia_restringida_mwh > 0
+              AND (:ne_only = false OR submercado = 'NE')
+            ORDER BY timestamp
+            """
+            rows_coff = self._safe_mappings_query(
+                sql_public_coff,
+                {"usina_id": usina_id, "inicio": inicio, "fim": fim, "ne_only": self.mvp_only_nordeste},
+            )
+            if rows_coff:
+                return rows_coff
+
             sql_public = """
             SELECT
                 id_ons AS usina_id,
@@ -249,6 +315,7 @@ class PostgresRepository(BaseRepository):
                 val_geracaoprogramada AS geracao_referencia_mwh,
                 GREATEST(COALESCE(val_geracaoprogramada,0) - COALESCE(val_geracaoverificada,0), 0) AS energia_restringida_mwh,
                 NULL::text AS razao_restricao,
+                NULL::text AS cod_razaorestricao,
                 CASE
                     WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
                     WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'

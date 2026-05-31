@@ -67,17 +67,12 @@ def resumo_usina(
             raise api_error(422, "parametro_data_invalido", str(exc))
 
     perda = financeiro.calcular_perda(usina_id, inicio_dt, fim_dt)
+    eleg = regulatorio.classificar_eventos(usina_id, inicio_dt, fim_dt, usar_ia_classificacao=False)
 
     total_perda = perda["total_perda_reais"]
     total_eventos = len(perda["serie"])
     ticket_medio = (total_perda / total_eventos) if total_eventos else 0.0
-
-    total_elegivel_est = 0.0
-    for razao, valor in perda.get("por_razao", {}).items():
-        razao_norm = regulatorio.policy.normalize_razao(razao)
-        if regulatorio.policy.is_elegivel(razao_norm):
-            total_elegivel_est += float(valor or 0.0)
-    perc_ress = (total_elegivel_est / total_perda * 100.0) if total_perda > 0 else 0.0
+    perc_ress = (eleg["total_potencial_ressarcivel_reais"] / total_perda * 100.0) if total_perda > 0 else 0.0
 
     risco_previsoes = []
     if incluir_risco:

@@ -29,7 +29,7 @@ def elegibilidade(
 ):
     try:
         i, f = parse_range(inicio, fim)
-        out = service.classificar_eventos(usina_id, i, f)
+        out = service.classificar_eventos(usina_id, i, f, usar_ia_classificacao=False)
         total = len(out["eventos"])
         out["paginacao_eventos"] = {"total_count": total, "limit": limit, "offset": offset}
         out["eventos"] = out["eventos"][offset : offset + limit]

@@ -45,11 +45,11 @@ class RegulatorioService:
         inicio: datetime,
         fim: datetime,
         franquia_horas_override: float | None = None,
-        usar_ia_classificacao: bool = True,
+        usar_ia_classificacao: bool = False,
     ) -> dict:
         cache_key = (
             f"classificar:{usina_id}:{inicio.isoformat()}:{fim.isoformat()}:"
-            f"{hash(frozenset(self.regras_elegibilidade.items()))}:frq={franquia_horas_override}"
+            f"{hash(frozenset(self.regras_elegibilidade.items()))}:frq={franquia_horas_override}:ia={int(usar_ia_classificacao)}"
         )
         if self.cache:
             cached = self.cache.get(cache_key)
@@ -223,9 +223,10 @@ class RegulatorioService:
             if cached is not None:
                 return cached
 
-        eleg = self.classificar_eventos(usina_id, inicio, fim)
+        eleg = self.classificar_eventos(usina_id, inicio, fim, usar_ia_classificacao=True)
         dossie = self.dossier_agent.gerar_dossie(eleg)
         out = {"usina_id": usina_id, "dossie_markdown": dossie}
+
         if self.cache:
             self.cache.set(cache_key, out)
         return out
@@ -242,6 +243,7 @@ class RegulatorioService:
             inicio=inicio,
             fim=fim,
             franquia_horas_override=franquia_horas_override,
+            usar_ia_classificacao=True,
         )
         dossie_md = self.dossier_agent.gerar_dossie(eleg)
         eleg = {

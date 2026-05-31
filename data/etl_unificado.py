@@ -44,13 +44,8 @@ except:
 # CONFIGURAÇÃO
 # ══════════════════════════════════════════════════════════════
 
-PG_HOST = os.environ.get("PG_HOST", "177.7.55.100")
-PG_PORT = os.environ.get("PG_PORT", "32775")
-PG_USER = os.environ.get("PG_USER", "analytica")
-PG_PASSWORD = os.environ.get("PG_PASSWORD", "Data&Dorme")
-PG_DATABASE = os.environ.get("PG_DATABASE", "hacka-energinn")
 
-BASE_LAKE = os.environ.get("LAKE_ROOT", "/home/juan/Desktop/ons_data_lake/lake")
+
 SILVER_DIR = os.path.join(BASE_LAKE, "silver")
 AGG_DIR = os.path.join(BASE_LAKE, "agg")
 

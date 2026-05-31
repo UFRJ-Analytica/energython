@@ -37,6 +37,12 @@ class TestDomainContractsAndPolicies(unittest.TestCase):
         self.assertEqual(policy.normalize_razao("ENE"), "energetico")
         self.assertTrue(policy.is_elegivel("confiabilidade"))
         self.assertFalse(policy.is_elegivel("energetico"))
+        self.assertEqual(policy.versao_regulatoria, "lei_15269_2025")
+
+    def test_regulatorio_policy_versionada_pre_lei(self):
+        policy = RegulatorioPolicy.by_version("pre_lei_15269_2025")
+        self.assertTrue(policy.is_elegivel("energetico"))
+        self.assertEqual(policy.versao_regulatoria, "pre_lei_15269_2025")
 
     def test_financeiro_policy_status_qualidade(self):
         policy = FinanceiroPolicy.default()

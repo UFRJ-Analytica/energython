@@ -21,12 +21,21 @@ class Settings(BaseSettings):
     elegivel_indisponibilidade_externa: bool = True
     elegivel_energetico: bool = False
     elegivel_indefinido: bool = False
+    regulatorio_policy_version: str = "lei_15269_2025"
 
     @field_validator("data_backend")
     @classmethod
     def validate_backend(cls, v: str) -> str:
         if v not in {"mock", "postgres"}:
             raise ValueError("DATA_BACKEND must be 'mock' or 'postgres'")
+        return v
+
+    @field_validator("regulatorio_policy_version")
+    @classmethod
+    def validate_regulatorio_policy_version(cls, v: str) -> str:
+        allowed = {"lei_15269_2025", "pos_lei_15269_2025", "vigente", "pre_lei_15269_2025", "historica_pre_2025"}
+        if v not in allowed:
+            raise ValueError("REGULATORIO_POLICY_VERSION invalida")
         return v
 
 

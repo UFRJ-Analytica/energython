@@ -202,6 +202,7 @@ class RegulatorioService:
                 "mvp_scope": "geradoras_renovaveis_submercado_ne",
                 "api_contract_version": "v1",
                 "data_quality_status": qualidade_status,
+                "regulatorio_policy_version": self.policy.versao_regulatoria,
             },
             "eventos": itens,
         }
@@ -261,6 +262,7 @@ class RegulatorioService:
             "metadata": {
                 "api_contract_version": "v1",
                 "fluxo": "agente_ressarcimento",
+                "regulatorio_policy_version": self.policy.versao_regulatoria,
             },
         }
 

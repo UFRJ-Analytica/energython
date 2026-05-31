@@ -44,6 +44,7 @@ class TestRegulatorioService(unittest.TestCase):
         self.assertIn("metadata", out)
         self.assertEqual(out["metadata"]["mvp_scope"], "geradoras_renovaveis_submercado_ne")
         self.assertEqual(out["metadata"]["api_contract_version"], "v1")
+        self.assertIn("regulatorio_policy_version", out["metadata"])
         self.assertIn("status", out["qualidade_dados"])
         self.assertIn("total_ressarcivel_pos_franquia_reais", out)
         self.assertIn("franquia_horas_ano", out)
@@ -135,6 +136,7 @@ class TestRegulatorioService(unittest.TestCase):
         self.assertIn("dossie_markdown", out)
         self.assertFalse(out["human_in_the_loop"]["submissao_automatica_habilitada"])
         self.assertEqual(out["resultado_elegibilidade"]["franquia_horas_ano"], 1.0)
+        self.assertIn("regulatorio_policy_version", out["metadata"])
 
     def test_exportar_dossie_markdown(self):
         out = self.svc.exportar_dossie(

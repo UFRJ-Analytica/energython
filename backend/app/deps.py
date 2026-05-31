@@ -7,6 +7,7 @@ from app.agents.classifier_agent import ClassifierAgent
 from app.agents.dossier_agent import DossierAgent
 from app.agents.rag_agent import RagAgent
 from app.config import Settings, get_settings
+from app.domain.policies import RegulatorioPolicy
 from app.database import get_db_session
 from app.repositories.base import BaseRepository
 from app.repositories.mock_repo import MockRepository
@@ -48,17 +49,26 @@ def get_regulatorio_service(
     classifier = ClassifierAgent(llm, model=settings.anthropic_model_fast)
     dossier = DossierAgent(llm, model=settings.anthropic_model_smart)
     rag = RagAgent(llm, model=settings.anthropic_model_smart, knowledge_dir=Path(__file__).resolve().parent / "knowledge")
+    try:
+        policy = RegulatorioPolicy.by_version(settings.regulatorio_policy_version)
+    except ValueError:
+        policy = RegulatorioPolicy.default()
     regras = {
         "confiabilidade": settings.elegivel_confiabilidade,
         "indisponibilidade_externa": settings.elegivel_indisponibilidade_externa,
         "energetico": settings.elegivel_energetico,
         "indefinido": settings.elegivel_indefinido,
     }
+    regras_merged = {**policy.elegibilidade_por_razao, **regras}
+    policy = RegulatorioPolicy(
+        elegibilidade_por_razao=regras_merged,
+        versao_regulatoria=policy.versao_regulatoria,
+    )
     return RegulatorioService(
         repo=repo,
         classifier_agent=classifier,
         dossier_agent=dossier,
         rag_agent=rag,
-        regras_elegibilidade=regras,
+        policy=policy,
         cache=regulatorio_cache,
     )

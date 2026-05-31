@@ -13,17 +13,36 @@ RAZAO_COFF_MAP = {
 @dataclass(frozen=True)
 class RegulatorioPolicy:
     elegibilidade_por_razao: dict[str, bool]
+    versao_regulatoria: str = "lei_15269_2025"
+
+    @classmethod
+    def by_version(cls, version: str) -> "RegulatorioPolicy":
+        v = (version or "").strip().lower()
+        if v in {"lei_15269_2025", "pos_lei_15269_2025", "vigente"}:
+            return cls(
+                elegibilidade_por_razao={
+                    "confiabilidade": True,
+                    "indisponibilidade_externa": True,
+                    "energetico": False,
+                    "indefinido": False,
+                },
+                versao_regulatoria="lei_15269_2025",
+            )
+        if v in {"pre_lei_15269_2025", "historica_pre_2025"}:
+            return cls(
+                elegibilidade_por_razao={
+                    "confiabilidade": True,
+                    "indisponibilidade_externa": True,
+                    "energetico": True,
+                    "indefinido": False,
+                },
+                versao_regulatoria="pre_lei_15269_2025",
+            )
+        raise ValueError("regulatorio_policy_version_invalida")
 
     @classmethod
     def default(cls) -> "RegulatorioPolicy":
-        return cls(
-            elegibilidade_por_razao={
-                "confiabilidade": True,
-                "indisponibilidade_externa": True,
-                "energetico": False,
-                "indefinido": False,
-            }
-        )
+        return cls.by_version("lei_15269_2025")
 
     def normalize_razao(self, razao: str | None) -> str | None:
         if not razao:

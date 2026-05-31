@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.domain.contracts import parse_constrained_off, parse_pld
 from app.domain.policies import FinanceiroPolicy
-
-
-def _ts_keys(value) -> tuple[str, str]:
-    """Gera chaves de comparação robustas (timestamp exato + arredondado para hora)."""
-    dt = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
-    dt = dt.replace(tzinfo=None)
-    return str(dt), str(dt.replace(minute=0, second=0, microsecond=0))
+from app.utils.datetime_utils import ts_keys
+from app.utils.logging_utils import log_json
 
 
 class FinanceiroService:
@@ -36,7 +31,7 @@ class FinanceiroService:
 
         for e in eventos:
             ts = str(e.timestamp)
-            ts_exato, ts_hora = _ts_keys(e.timestamp)
+            ts_exato, ts_hora = ts_keys(e.timestamp)
             energia = e.energia_restringida_mwh
             preco = pld_map.get(ts_exato)
             if preco is None:
@@ -64,6 +59,16 @@ class FinanceiroService:
             total_pld_rows=len(pld),
         )
 
+        log_json(
+            "financeiro.calcular_perda",
+            usina_id=usina_id,
+            total_eventos=len(eventos),
+            total_perda_reais=round(total_perda, 2),
+            total_energia_mwh=round(total_energia, 4),
+            pld_faltante_eventos=pld_faltante_eventos,
+            qualidade_status=status,
+        )
+
         return {
             "usina_id": usina_id,
             "total_perda_reais": round(total_perda, 2),
@@ -84,7 +89,7 @@ class FinanceiroService:
         }
 
     def projetar_exposicao(self, usina_id: str, horizonte_horas: int = 48) -> dict:
-        agora = datetime.utcnow()
+        agora = datetime.now(timezone.utc).replace(tzinfo=None)
         inicio_hist = agora - timedelta(days=30)
         usina = self.repo.get_usina(usina_id)
         if not usina:

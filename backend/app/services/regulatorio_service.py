@@ -6,12 +6,8 @@ from datetime import datetime
 from app.domain.contracts import parse_constrained_off, parse_pld
 from app.domain.policies import RegulatorioPolicy
 from app.services.financeiro_service import FinanceiroService
-
-
-def _ts_hour_key(value) -> str:
-    dt = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
-    dt = dt.replace(tzinfo=None)
-    return str(dt.replace(minute=0, second=0, microsecond=0))
+from app.utils.datetime_utils import ts_hour_key
+from app.utils.logging_utils import log_json
 
 
 class RegulatorioService:
@@ -54,6 +50,7 @@ class RegulatorioService:
         if self.cache:
             cached = self.cache.get(cache_key)
             if cached is not None:
+                log_json("regulatorio.classificar_eventos.cache_hit", usina_id=usina_id)
                 return cached
 
         usina = self.repo.get_usina(usina_id)
@@ -63,7 +60,7 @@ class RegulatorioService:
         eventos = parse_constrained_off(self.repo.get_constrained_off(usina_id, inicio, fim))
         pld = parse_pld(self.repo.get_pld(usina["submercado"], inicio, fim))
         pld_map = {str(p.timestamp): p.pld_reais_mwh for p in pld}
-        pld_map_hora = {_ts_hour_key(p.timestamp): p.pld_reais_mwh for p in pld}
+        pld_map_hora = {ts_hour_key(p.timestamp): p.pld_reais_mwh for p in pld}
 
         itens = []
         total_potencial = 0.0
@@ -132,7 +129,7 @@ class RegulatorioService:
             regra_aplicada = f"razao={razao};elegivel={str(elegivel).lower()}"
             preco = pld_map.get(str(e.timestamp))
             if preco is None:
-                preco = pld_map_hora.get(_ts_hour_key(e.timestamp))
+                preco = pld_map_hora.get(ts_hour_key(e.timestamp))
             if preco is None:
                 pld_faltante_eventos += 1
                 preco = 0.0
@@ -233,6 +230,18 @@ class RegulatorioService:
             },
             "eventos": itens,
         }
+        log_json(
+            "regulatorio.classificar_eventos",
+            usina_id=usina_id,
+            total_eventos=len(eventos),
+            classificados_por_ia=classificados_por_ia,
+            classificados_por_gold=classificados_por_gold,
+            horas_elegiveis=round(horas_elegiveis_no_periodo, 2),
+            total_potencial_reais=round(total_potencial, 2),
+            total_ressarcivel_pos_franquia=round(total_ressarcivel_pos_franquia, 2),
+            qualidade_status=qualidade_status,
+        )
+
         if self.cache:
             self.cache.set(cache_key, out)
         return out

@@ -13,6 +13,9 @@ import { fmtBRL, fmtMWh, fmtPct, fmtNum, toIso } from "@/lib/formatters"
 function HeroNumber({ value }: { value: number }) {
   const counted = useCountUp(value)
   const formatted = fmtBRL(counted)
+  if (value === 0) {
+    return <span className="text-muted-foreground/60">{formatted}</span>
+  }
   return (
     <span className="bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">
       {formatted}

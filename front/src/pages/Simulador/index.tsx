@@ -40,7 +40,7 @@ export default function Simulador() {
   const [potencia, setPotencia] = useState(30)
   const [duracao, setDuracao] = useState(4)
   const [eficiencia, setEficiencia] = useState(85)
-  const [capex, setCapex] = useState("120000000")
+  const [capex, setCapex] = useState(120_000_000)
   const [presetResults, setPresetResults] = useState<(BessOut | null)[]>([null, null])
 
   const main = useBessSimular(id!, inicio, fim)
@@ -49,7 +49,7 @@ export default function Simulador() {
   const lastPresetKeyRef = useRef<string>("")
 
   const runMain = useCallback(() => {
-    main.mutate({ potencia_mw: potencia, duracao_horas: duracao, eficiencia: eficiencia / 100, capex: capex ? Number(capex) : undefined })
+    main.mutate({ potencia_mw: potencia, duracao_horas: duracao, eficiencia: eficiencia / 100, capex: capex > 0 ? capex : undefined })
   }, [main, potencia, duracao, eficiencia, capex])
 
   const runPresetComparacao = useCallback(() => {
@@ -117,7 +117,17 @@ export default function Simulador() {
 
           <div className="space-y-1.5">
             <Label className="text-sm">CAPEX (R$) — opcional</Label>
-            <Input type="number" value={capex} onChange={(e) => setCapex(e.target.value)} className="font-mono text-sm h-8" placeholder="120000000" />
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={capex > 0 ? new Intl.NumberFormat("pt-BR").format(capex) : ""}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/\D/g, "")
+                setCapex(raw ? Number(raw) : 0)
+              }}
+              className="font-mono text-sm h-8"
+              placeholder="R$ 0"
+            />
           </div>
 
           <button
@@ -170,13 +180,16 @@ export default function Simulador() {
           </button>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {PRESETS.map((p, i) =>
-            presetResults[i] ? (
-              <ResultCard key={p.label} result={presetResults[i]!} label={p.label} />
-            ) : (
-              <Skeleton key={p.label} className="h-36 rounded-xl" />
+          {PRESETS.map((p, i) => {
+            if (presetResults[i]) return <ResultCard key={p.label} result={presetResults[i]!} label={p.label} />
+            if (preset0.isPending || preset1.isPending) return <Skeleton key={p.label} className="h-36 rounded-xl" />
+            return (
+              <div key={p.label} className="rounded-xl border border-border/30 p-6 flex flex-col items-center justify-center text-center gap-1 min-h-36">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{p.label}</p>
+                <p className="text-xs text-muted-foreground/50 mt-1">Clique em "Rodar comparação"</p>
+              </div>
             )
-          )}
+          })}
         </div>
       </div>
     </div>

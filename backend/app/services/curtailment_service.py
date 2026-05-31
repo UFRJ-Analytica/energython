@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.ml.features import build_inference_frame
 from app.ml.predictor import CurtailmentPredictor
@@ -26,7 +26,7 @@ class CurtailmentService:
         if not usina:
             return {"usina_id": usina_id, "horizonte_horas": horizonte_horas, "previsoes": []}
 
-        now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+        now = datetime.now(timezone.utc).replace(tzinfo=None, minute=0, second=0, microsecond=0)
         fim = now + timedelta(hours=horizonte_horas)
 
         clima_future = self.repo.get_clima_horario(usina_id, now, fim, is_forecast=True)

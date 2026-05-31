@@ -6,31 +6,6 @@
 ╚════════════════════════════════════════════════════════════════════════════╝
 ```
 
-## 📂 ARQUIVOS CRIADOS
-
-```
-/home/juan/Desktop/ons_data_lake/spark_duck/
-├── etl_unificado.py                           ⭐ EXECUTE ESTE
-│   └─ Script principal (~15KB, 350 linhas)
-│      Lê do PostgreSQL → Limpa → Escreve Parquet
-│
-└── arquitetura/                               📚 DOCUMENTAÇÃO
-    ├── README.md                              ← COMECE AQUI
-    │   └─ Índice, quick start, estrutura
-    │
-    ├── SUMARIO_EXECUTIVO.md
-    │   └─ O que foi feito (2 minutos)
-    │
-    ├── ETL_CAMADA_PRATA_DOCUMENTACAO_COMPLETA.md
-    │   └─ Tudo técnico (30+ minutos de leitura)
-    │
-    ├── GUIA_IMPLEMENTACAO_BACKEND_FRONTEND.md
-    │   └─ Código Python + React pronto para copiar
-    │
-    └── DELIVERABLES.txt
-        └─ Este sumário (checklist + paths)
-```
-
 ---
 
 ## 🔄 FLUXO DO ETL

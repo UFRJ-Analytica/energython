@@ -82,6 +82,8 @@ class FluxoRessarcimentoOut(BaseModel):
     usina_id: str
     periodo: dict
     selecao: dict
+    reconciliacao: dict
+    etapas: list[str]
     resultado_elegibilidade: ElegibilidadeOut
     dossie_markdown: str
     human_in_the_loop: dict

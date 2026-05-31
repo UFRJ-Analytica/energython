@@ -88,6 +88,31 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
         <KpiCard title="Horas excedentes" value={`${fmtNum(effective.horas_excedentes_franquia_no_periodo)} h`} />
       </div>
 
+
+      {fluxo.data && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Reconciliação do agente (ponta a ponta)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div><span className="text-muted-foreground">Energia total:</span> {fmtMWh(fluxo.data.reconciliacao.energia_total_mwh)}</div>
+              <div><span className="text-muted-foreground">Perda total:</span> {fmtBRL(fluxo.data.reconciliacao.perda_total_reais)}</div>
+              <div><span className="text-muted-foreground">Ressarcível pós-franquia:</span> {fmtBRL(fluxo.data.reconciliacao.ressarcivel_pos_franquia_reais)}</div>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              PLD faltante: {fmtNum(fluxo.data.reconciliacao.pld_faltante_eventos)} eventos ·
+              Sem razão original: {fmtNum(fluxo.data.reconciliacao.eventos_sem_razao_original)} eventos
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {fluxo.data.etapas.map((etapa) => (
+                <Badge key={etapa} variant="secondary">{etapa}</Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">Eventos de elegibilidade</CardTitle>

@@ -72,6 +72,8 @@ class RegulatorioService:
         pld_faltante_eventos = 0
         eventos_sem_razao_original = 0
         eventos_com_razao_normalizada = 0
+        classificacao_ia_por_razao: dict[str, dict] = {}
+        max_classificacoes_ia = 12
 
         fonte_usina = usina.get("fonte")
         ano_base = inicio.year
@@ -92,12 +94,31 @@ class RegulatorioService:
             fonte_classificacao = "gold"
 
             if (not razao or razao not in self.regras_elegibilidade) and usar_ia_classificacao:
-                pred = self.classifier_agent.classificar_evento(e)
-                razao = pred.get("razao", "indefinido")
-                confianca = float(pred.get("confianca", 0.0) or 0.0)
-                justificativa = str(pred.get("justificativa", "classificacao_por_ia"))
-                fonte_classificacao = "ia"
-                classificados_por_ia += 1
+                chave_razao = str(razao_original or "").strip().lower()
+                if not chave_razao:
+                    razao = "indefinido"
+                    confianca = 0.0
+                    justificativa = "sem_razao_original_para_classificar"
+                    fonte_classificacao = "regra_default"
+                elif chave_razao in classificacao_ia_por_razao:
+                    pred = classificacao_ia_por_razao[chave_razao]
+                    razao = pred.get("razao", "indefinido")
+                    confianca = float(pred.get("confianca", 0.0) or 0.0)
+                    justificativa = str(pred.get("justificativa", "classificacao_por_ia_cache_razao"))
+                    fonte_classificacao = "ia"
+                elif len(classificacao_ia_por_razao) < max_classificacoes_ia:
+                    pred = self.classifier_agent.classificar_evento(e)
+                    classificacao_ia_por_razao[chave_razao] = pred
+                    razao = pred.get("razao", "indefinido")
+                    confianca = float(pred.get("confianca", 0.0) or 0.0)
+                    justificativa = str(pred.get("justificativa", "classificacao_por_ia"))
+                    fonte_classificacao = "ia"
+                    classificados_por_ia += 1
+                else:
+                    razao = "indefinido"
+                    confianca = 0.0
+                    justificativa = "limite_classificacao_ia_atingido"
+                    fonte_classificacao = "regra_default"
             else:
                 if not razao or razao not in self.regras_elegibilidade:
                     razao = "indefinido"
@@ -238,6 +259,16 @@ class RegulatorioService:
         fim: datetime,
         franquia_horas_override: float | None = None,
     ) -> dict:
+        cache_key = (
+            f"fluxo_ressarcimento:{usina_id}:{inicio.isoformat()}:{fim.isoformat()}:"
+            f"frq={franquia_horas_override}"
+        )
+        if self.cache:
+            cached = self.cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+        perda = self.financeiro_service.calcular_perda(usina_id, inicio, fim)
         eleg = self.classificar_eventos(
             usina_id=usina_id,
             inicio=inicio,
@@ -254,13 +285,32 @@ class RegulatorioService:
                 "offset": 0,
             },
         }
-        return {
+
+        reconciliacao = {
+            "energia_total_mwh": round(float(perda.get("total_energia_restringida_mwh", 0.0) or 0.0), 4),
+            "perda_total_reais": round(float(perda.get("total_perda_reais", 0.0) or 0.0), 2),
+            "potencial_ressarcivel_reais": eleg.get("total_potencial_ressarcivel_reais", 0.0),
+            "ressarcivel_pos_franquia_reais": eleg.get("total_ressarcivel_pos_franquia_reais", 0.0),
+            "pld_faltante_eventos": int(eleg.get("qualidade_dados", {}).get("pld_faltante_eventos", 0) or 0),
+            "eventos_sem_razao_original": int(eleg.get("qualidade_dados", {}).get("eventos_sem_razao_original", 0) or 0),
+        }
+
+        out = {
             "usina_id": usina_id,
             "periodo": {"inicio": inicio.isoformat(), "fim": fim.isoformat()},
             "selecao": {
                 "fonte_eventos": "constrained_off",
                 "eventos_totais": len(eleg.get("eventos", [])),
+                "eventos_elegiveis": int(eleg.get("horas_elegiveis_no_periodo", 0) or 0),
             },
+            "reconciliacao": reconciliacao,
+            "etapas": [
+                "ingestao_eventos_constrained_off",
+                "reconciliacao_eventos_pld",
+                "classificacao_razao_elegibilidade",
+                "aplicacao_franquia_anual",
+                "geracao_pleito_dossie",
+            ],
             "resultado_elegibilidade": eleg,
             "dossie_markdown": dossie_md,
             "human_in_the_loop": {
@@ -273,6 +323,9 @@ class RegulatorioService:
                 "regulatorio_policy_version": self.policy.versao_regulatoria,
             },
         }
+        if self.cache:
+            self.cache.set(cache_key, out)
+        return out
 
     def exportar_dossie(
         self,

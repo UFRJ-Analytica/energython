@@ -76,7 +76,16 @@ export interface FluxoRessarcimentoRequest {
 export interface FluxoRessarcimentoOut {
   usina_id: string
   periodo: { inicio: string; fim: string }
-  selecao: { fonte_eventos: string; eventos_totais: number }
+  selecao: { fonte_eventos: string; eventos_totais: number; eventos_elegiveis?: number }
+  reconciliacao: {
+    energia_total_mwh: number
+    perda_total_reais: number
+    potencial_ressarcivel_reais: number
+    ressarcivel_pos_franquia_reais: number
+    pld_faltante_eventos: number
+    eventos_sem_razao_original: number
+  }
+  etapas: string[]
   resultado_elegibilidade: ElegibilidadeOut
   dossie_markdown: string
   human_in_the_loop: {

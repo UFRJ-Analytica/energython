@@ -1,9 +1,7 @@
-import { AlertTriangle, DollarSign, TrendingDown, Zap } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { CalendarClock, DollarSign, TrendingDown, Zap } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { KpiCard } from "@/components/shared/KpiCard"
 import { ErrorState } from "@/components/shared/ErrorState"
-import { RiskForecastChart } from "@/components/charts/RiskForecastChart"
 import { useUsinaResumo } from "@/hooks/useUsinas"
 import { fmtBRL, fmtMWh, fmtPct, fmtNum } from "@/lib/formatters"
 
@@ -44,24 +42,14 @@ export function SummaryTab({ usinaId, inicio, fim }: Props) {
           icon={<Zap className="h-4 w-4 text-muted-foreground" />}
         />
         <KpiCard
-          title="Risco 48h"
-          value={data.risco_48h.length > 0 ? fmtPct(Math.max(...data.risco_48h.map((r) => r.probabilidade_corte)) * 100) : "—"}
-          sub="pico de probabilidade"
-          icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />}
+          title="Perda esperada (30 dias)"
+          value={fmtBRL(data.perda_esperada_30d.valor_reais)}
+          sub={data.perda_esperada_30d.observacao ?? "estimativa histórica"}
+          icon={<CalendarClock className="h-4 w-4 text-muted-foreground" />}
           highlight="warning"
         />
       </div>
 
-      {data.risco_48h.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Previsão de risco — próximas 48h</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RiskForecastChart data={data.risco_48h} />
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }

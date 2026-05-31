@@ -19,6 +19,13 @@ class UsinaListOut(BaseModel):
     items: list[UsinaOut]
 
 
+class PerdaEsperadaOut(BaseModel):
+    valor_reais: float
+    horizonte_dias: int
+    metodo: str
+    observacao: str | None = None
+
+
 class UsinaResumoOut(BaseModel):
     usina: UsinaOut
     total_corte_mwh: float
@@ -27,4 +34,4 @@ class UsinaResumoOut(BaseModel):
     total_eventos_corte: int
     ticket_medio_evento_reais: float
     metadata: MetaOut
-    risco_48h: list[dict]
+    perda_esperada_30d: PerdaEsperadaOut

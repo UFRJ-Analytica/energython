@@ -13,6 +13,7 @@ export interface UsinaListOut {
   items: UsinaOut[]
 }
 
+
 export interface RiscoHora {
   timestamp: string
   probabilidade_corte: number
@@ -26,5 +27,10 @@ export interface UsinaResumoOut {
   percentual_ressarcivel: number
   total_eventos_corte: number
   ticket_medio_evento_reais: number
-  risco_48h: RiscoHora[]
+  perda_esperada_30d: {
+    valor_reais: number
+    horizonte_dias: number
+    metodo: string
+    observacao?: string | null
+  }
 }

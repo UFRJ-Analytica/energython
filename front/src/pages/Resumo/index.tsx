@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { subDays } from "date-fns"
-import { ArrowRight, AlertTriangle, TrendingDown } from "lucide-react"
+import { ArrowRight, CalendarClock, TrendingDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DateRangePicker } from "@/components/shared/DateRangePicker"
@@ -28,12 +28,6 @@ export default function Resumo() {
 
   const { data, isLoading, error } = useUsinaResumo(id!, inicio, fim)
 
-  const maxRiscoProb = data?.risco_48h.length
-    ? Math.max(...data.risco_48h.map((r) => r.probabilidade_corte))
-    : 0
-  const maxRiscoMwh = data?.risco_48h.length
-    ? Math.max(...data.risco_48h.map((r) => r.magnitude_estimada_mwh))
-    : 0
 
   return (
     <div className="container mx-auto max-w-4xl px-6 py-10">
@@ -94,17 +88,17 @@ export default function Resumo() {
               </Button>
             </div>
 
-            {/* Satélite 2 — risco 48h (âmbar, 2/5) */}
+            {/* Satélite 2 — perda esperada 30d (âmbar, 2/5) */}
             <div className="sm:col-span-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 space-y-1">
               <div className="flex items-center gap-2 text-xs text-amber-400/70 uppercase tracking-widest">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Risco 48h
+                <CalendarClock className="h-3.5 w-3.5" />
+                Perda esperada (30 dias)
               </div>
               <div className="text-4xl font-bold text-amber-400">
-                {maxRiscoProb > 0 ? fmtPct(maxRiscoProb * 100) : "—"}
+                {fmtBRL(data.perda_esperada_30d.valor_reais)}
               </div>
               <p className="text-sm text-amber-300/70">
-                {maxRiscoMwh > 0 ? `~${fmtMWh(maxRiscoMwh)} em risco` : "sem previsão disponível"}
+                {data.perda_esperada_30d.observacao ?? "estimativa histórica"}
               </p>
               <Button
                 size="sm"

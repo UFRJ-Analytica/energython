@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 
-from app.deps import get_curtailment_service, get_financeiro_service, get_regulatorio_service, get_repo
+from app.deps import get_financeiro_service, get_regulatorio_service, get_repo
 from app.repositories.base import BaseRepository
 from app.schemas.usinas import UsinaListOut, UsinaOut, UsinaResumoOut
 from app.utils.datetime_utils import DateRangeError, parse_iso_datetime, parse_range
@@ -47,11 +47,9 @@ def resumo_usina(
     usina_id: str,
     inicio: str | None = Query(default=None),
     fim: str | None = Query(default=None),
-    incluir_risco: bool = Query(default=False),
     repo: BaseRepository = Depends(get_repo),
     financeiro=Depends(get_financeiro_service),
     regulatorio=Depends(get_regulatorio_service),
-    curtailment=Depends(get_curtailment_service),
 ):
     usina = repo.get_usina(usina_id)
     if not usina:
@@ -74,10 +72,14 @@ def resumo_usina(
     ticket_medio = (total_perda / total_eventos) if total_eventos else 0.0
     perc_ress = (eleg["total_potencial_ressarcivel_reais"] / total_perda * 100.0) if total_perda > 0 else 0.0
 
-    risco_previsoes = []
-    if incluir_risco:
-        risco = curtailment.prever_risco(usina_id, horizonte_horas=48)
-        risco_previsoes = risco.get("previsoes", [])
+    dias_janela = max((fim_dt - inicio_dt).total_seconds() / 86400.0, 1.0)
+    perda_media_diaria = total_perda / dias_janela if total_perda > 0 else 0.0
+    perda_esperada_30d = {
+        "valor_reais": round(perda_media_diaria * 30.0, 2),
+        "horizonte_dias": 30,
+        "metodo": "media_diaria_historica",
+        "observacao": "Estimativa baseada na média diária observada no período selecionado.",
+    }
 
     return {
         "usina": usina,
@@ -92,5 +94,5 @@ def resumo_usina(
             "api_contract_version": "v1",
             "data_quality_status": perda["qualidade_dados"]["status"],
         },
-        "risco_48h": risco_previsoes,
+        "perda_esperada_30d": perda_esperada_30d,
     }

@@ -32,3 +32,7 @@ dist/
 
 # Local caches
 backend/**/__pycache__/
+
+# ML artifacts/datasets locais
+backend/models_ml/*.pkl
+backend/data/training_*/

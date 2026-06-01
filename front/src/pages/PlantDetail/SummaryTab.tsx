@@ -42,9 +42,9 @@ export function SummaryTab({ usinaId, inicio, fim }: Props) {
           icon={<Zap className="h-4 w-4 text-muted-foreground" />}
         />
         <KpiCard
-          title="Perda esperada (30 dias)"
+          title="Previsão futura com ML (30 dias)"
           value={fmtBRL(data.perda_esperada_30d.valor_reais)}
-          sub={data.perda_esperada_30d.observacao ?? "estimativa histórica"}
+          sub="Projeção de perda energética futura"
           icon={<CalendarClock className="h-4 w-4 text-muted-foreground" />}
           highlight="warning"
         />

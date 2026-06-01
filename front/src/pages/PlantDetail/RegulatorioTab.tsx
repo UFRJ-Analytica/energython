@@ -199,7 +199,7 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Consulta regulatória (RAG)</CardTitle>
+          <CardTitle className="text-sm font-medium">Curtail AI</CardTitle>
         </CardHeader>
         <CardContent>
           <RegulatorioQA />

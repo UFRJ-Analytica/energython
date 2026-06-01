@@ -91,18 +91,16 @@ export default function Resumo() {
               </Button>
             </div>
 
-            {/* Satélite 2 — perda esperada 30d (âmbar, 2/5) */}
+            {/* Satélite 2 — previsão futura ML 30d (âmbar, 2/5) */}
             <div className="sm:col-span-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 space-y-1">
               <div className="flex items-center gap-2 text-xs text-amber-400/70 uppercase tracking-widest">
                 <CalendarClock className="h-3.5 w-3.5" />
-                Perda esperada (30 dias)
+                Previsão futura com ML (30 dias)
               </div>
               <div className="text-4xl font-bold text-amber-400">
                 {fmtBRL(data.perda_esperada_30d.valor_reais)}
               </div>
-              <p className="text-sm text-amber-300/70">
-                {data.perda_esperada_30d.observacao ?? "estimativa histórica"}
-              </p>
+              <p className="text-sm text-amber-300/70">Projeção de perda energética futura</p>
               <Button
                 size="sm"
                 variant="ghost"

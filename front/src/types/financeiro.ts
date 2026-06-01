@@ -48,4 +48,11 @@ export interface BessOut {
   percentual_mitigado: number
   capex?: number
   payback_anos?: number
+  dimensionamento_com_previsao?: {
+    tipo_dado: "previsao"
+    metodo_previsao: string
+    energia_perdida_prevista_mwh: number
+    energia_recuperavel_prevista_mwh: number
+    perda_financeira_evitavel_prevista_reais: number
+  }
 }

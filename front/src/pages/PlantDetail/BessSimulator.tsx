@@ -77,6 +77,26 @@ export function BessSimulator({ usinaId, inicio, fim }: Props) {
                 <KpiCard title="Payback" value={`${data.payback_anos.toFixed(1)} anos`} />
               )}
             </div>
+            {data.dimensionamento_com_previsao && (
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                <KpiCard
+                  title="Perda energética futura"
+                  value={fmtMWh(data.dimensionamento_com_previsao.energia_perdida_prevista_mwh)}
+                  sub="Previsão futura com ML"
+                />
+                <KpiCard
+                  title="Energia recuperável futura"
+                  value={fmtMWh(data.dimensionamento_com_previsao.energia_recuperavel_prevista_mwh)}
+                  sub="Com o BESS simulado"
+                />
+                <KpiCard
+                  title="Perda evitável futura"
+                  value={fmtBRL(data.dimensionamento_com_previsao.perda_financeira_evitavel_prevista_reais)}
+                  sub="Projeção financeira com ML"
+                  highlight="warning"
+                />
+              </div>
+            )}
           </>
         )}
       </CardContent>

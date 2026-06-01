@@ -27,6 +27,16 @@ function ResultCard({ result, label, highlight }: { result: BessOut; label: stri
       <div className="space-y-1 text-sm text-muted-foreground">
         <p>{fmtMWh(result.energia_recuperada_mwh)} recuperados</p>
         <p>{fmtPct(result.percentual_mitigado)} do corte mitigado</p>
+        {result.dimensionamento_com_previsao && (
+          <p>
+            Perda energética futura (ML): <span className="text-foreground font-medium">{fmtMWh(result.dimensionamento_com_previsao.energia_perdida_prevista_mwh)}</span>
+          </p>
+        )}
+        {result.dimensionamento_com_previsao && (
+          <p>
+            Perda evitável futura: <span className="text-foreground font-medium">{fmtBRL(result.dimensionamento_com_previsao.perda_financeira_evitavel_prevista_reais)}</span>
+          </p>
+        )}
         {result.payback_anos != null && <p>Payback estimado: <span className="text-foreground font-medium">{result.payback_anos.toFixed(1)} anos</span></p>}
       </div>
     </div>

@@ -567,9 +567,9 @@ class PostgresRepository(BaseRepository):
                 b.timestamp,
                 b.energia_restringida_mwh,
                 CASE
-                    WHEN b.cod_razaorestricao ILIKE 'CF%' OR b.cod_razaorestricao ILIKE 'CONFIAB%' THEN 'confiabilidade'
-                    WHEN b.cod_razaorestricao ILIKE 'IE%' OR b.cod_razaorestricao ILIKE 'INDISP_EXT%' THEN 'indisponibilidade_externa'
-                    WHEN b.cod_razaorestricao ILIKE 'EN%' OR b.cod_razaorestricao ILIKE 'ENER%' THEN 'energetico'
+                    WHEN b.cod_razaorestricao ILIKE 'CF%' OR b.cod_razaorestricao ILIKE 'CNF%' OR b.cod_razaorestricao ILIKE 'CONFIAB%' THEN 'confiabilidade'
+                    WHEN b.cod_razaorestricao ILIKE 'IE%' OR b.cod_razaorestricao ILIKE 'REL%' OR b.cod_razaorestricao ILIKE 'INDISP_EXT%' THEN 'indisponibilidade_externa'
+                    WHEN b.cod_razaorestricao ILIKE 'EN%' OR b.cod_razaorestricao ILIKE 'ENE%' OR b.cod_razaorestricao ILIKE 'ENER%' THEN 'energetico'
                     WHEN b.cod_razaorestricao ILIKE 'RE%' OR b.cod_razaorestricao ILIKE 'ELE%' THEN 'restricao_eletrica'
                     WHEN b.cod_razaorestricao ILIKE 'SE%' OR b.cod_razaorestricao ILIKE 'SEG%' THEN 'seguranca_eletroenergetica'
                     ELSE 'indefinido'

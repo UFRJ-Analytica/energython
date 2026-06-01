@@ -1,9 +1,135 @@
 from __future__ import annotations
 
+import csv
+import os
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
+from pathlib import Path
 
 from app.domain.contracts import parse_constrained_off, parse_pld
+
+
+def _parse_dt(value: str) -> datetime | None:
+    if not value:
+        return None
+    raw = str(value).strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw)
+    except Exception:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+            try:
+                dt = datetime.strptime(raw, fmt)
+                break
+            except Exception:
+                dt = None
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _demo_cache_dir() -> Path:
+    override = os.getenv("CURTAILMENT_DEMO_CACHE_DIR", "").strip()
+    if override:
+        return Path(override)
+    return Path(__file__).resolve().parents[2] / "models_ml" / "data_ml" / "temp_cache"
+
+
+def _demo_cache_enabled() -> bool:
+    return os.getenv("CURTAILMENT_DEMO_LOCAL_CACHE_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+@lru_cache(maxsize=1)
+def _demo_usinas_map() -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    path = _demo_cache_dir() / "usinas_cache.csv"
+    if not path.exists():
+        return out
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                uid = str(row.get("usina_id") or "").strip()
+                if not uid:
+                    continue
+                out[uid] = {
+                    "usina_id": uid,
+                    "nome": str(row.get("nome") or "").strip(),
+                    "fonte": str(row.get("fonte") or "").strip().lower(),
+                    "submercado": str(row.get("submercado") or "").strip().upper(),
+                }
+    except Exception:
+        return {}
+    return out
+
+
+@lru_cache(maxsize=64)
+def _demo_event_points(usina_id: str) -> list[tuple[datetime, float]]:
+    points: list[tuple[datetime, float]] = []
+    base = _demo_cache_dir()
+    for file_name in ("flat_dados_eolica.csv", "flat_dados_solar.csv"):
+        path = base / file_name
+        if not path.exists():
+            continue
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if str(row.get("usina_id") or "").strip() != usina_id:
+                        continue
+                    ts = _parse_dt(str(row.get("timestamp") or ""))
+                    if ts is None:
+                        continue
+                    try:
+                        energia = float(row.get("energia_restringida_mwh") or 0.0)
+                    except Exception:
+                        energia = 0.0
+                    points.append((ts, max(0.0, energia)))
+        except Exception:
+            continue
+    points.sort(key=lambda x: x[0])
+    return points
+
+
+@lru_cache(maxsize=16)
+def _demo_pld_points(submercado: str) -> list[tuple[datetime, float]]:
+    points: list[tuple[datetime, float]] = []
+    path = _demo_cache_dir() / "ccee_cache.csv"
+    if not path.exists():
+        return points
+    subm_norm = (submercado or "").strip().upper()
+    aliases = {"NE": "NORDESTE", "SE": "SUDESTE", "N": "NORTE", "S": "SUL"}
+    subm_candidates = {subm_norm, aliases.get(subm_norm, subm_norm)}
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                subm = str(row.get("submercado") or row.get("id_submercado") or "").strip().upper()
+                if subm not in subm_candidates:
+                    continue
+                mes = str(row.get("mes_referencia") or "").strip()
+                dia = str(row.get("dia") or "").strip().zfill(2)
+                hora = str(row.get("hora") or "").strip().zfill(2)
+                ts = _parse_dt(f"{mes}{dia}{hora}")
+                if ts is None:
+                    try:
+                        ts = datetime.strptime(f"{mes}{dia}{hora}", "%Y%m%d%H")
+                    except Exception:
+                        ts = None
+                if ts is None:
+                    continue
+                val_raw = str(row.get("pld_hora") or row.get("pld") or "0").replace(",", ".")
+                try:
+                    pld = float(val_raw)
+                except Exception:
+                    pld = 0.0
+                points.append((ts, max(0.0, pld)))
+    except Exception:
+        return []
+    points.sort(key=lambda x: x[0])
+    return points
 
 
 def _hourly_mean(values: list[float]) -> float:
@@ -82,8 +208,28 @@ def forecast_future_losses(
     now = datetime.now(timezone.utc).replace(tzinfo=None, minute=0, second=0, microsecond=0)
     hist_start = now - timedelta(days=30)
 
-    eventos_hist = parse_constrained_off(repo.get_constrained_off(usina["usina_id"], hist_start, now))
-    pld_hist = parse_pld(repo.get_pld(usina["submercado"], hist_start, now))
+    eventos_hist = []
+    pld_hist = []
+    metodo_cache = ""
+    if _demo_cache_enabled() and usina.get("usina_id") in _demo_usinas_map():
+        raw_events = _demo_event_points(str(usina["usina_id"]))
+        eventos_hist = [
+            type("Evt", (), {"timestamp": ts, "energia_restringida_mwh": energia})
+            for ts, energia in raw_events
+            if hist_start <= ts <= now
+        ]
+        raw_pld = _demo_pld_points(str(usina.get("submercado") or ""))
+        pld_hist = [
+            type("Pld", (), {"timestamp": ts, "pld_reais_mwh": pld})
+            for ts, pld in raw_pld
+            if hist_start <= ts <= now
+        ]
+        metodo_cache = "demo_cache_local"
+
+    if not eventos_hist:
+        eventos_hist = parse_constrained_off(repo.get_constrained_off(usina["usina_id"], hist_start, now))
+    if not pld_hist:
+        pld_hist = parse_pld(repo.get_pld(usina["submercado"], hist_start, now))
 
     pld_forecast = _build_pld_seasonal_forecast(pld_hist, horizon_hours=horizon_hours, now=now)
     pld_map = {item["timestamp"]: item["pld_previsto_reais_mwh"] for item in pld_forecast}
@@ -158,6 +304,9 @@ def forecast_future_losses(
             }
         )
 
+    if metodo_cache and method == "fallback_sazonal":
+        method = f"{method}+{metodo_cache}"
+
     return {
         "metodo_previsao": method,
         "horizonte_horas": horizon_hours,
@@ -165,6 +314,10 @@ def forecast_future_losses(
         "perda_total_prevista_reais": round(total_financial, 2),
         "serie_previsao": series,
     }
+
+
+def list_demo_cache_usinas() -> list[dict]:
+    return sorted(_demo_usinas_map().values(), key=lambda x: x.get("usina_id") or "")
 
 
 def build_historical_vs_forecast_losses(

@@ -31,10 +31,13 @@ class FinanceiroService:
         cod = (evento.cod_razaorestricao or "").strip().upper().replace("-", "_")
         cod_map = {
             "CF": "confiabilidade",
+            "CNF": "confiabilidade",
             "CONFIAB": "confiabilidade",
             "IE": "indisponibilidade_externa",
+            "REL": "indisponibilidade_externa",
             "INDISP_EXT": "indisponibilidade_externa",
             "EN": "energetico",
+            "ENE": "energetico",
             "ENER": "energetico",
             "RE": "restricao_eletrica",
             "ELE": "restricao_eletrica",

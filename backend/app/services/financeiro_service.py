@@ -17,6 +17,12 @@ class FinanceiroService:
         self.cache = cache
 
     @staticmethod
+    def _cache_range_bucket(inicio: datetime, fim: datetime) -> tuple[str, str]:
+        inicio_h = inicio.replace(minute=0, second=0, microsecond=0)
+        fim_h = fim.replace(minute=0, second=0, microsecond=0)
+        return inicio_h.isoformat(), fim_h.isoformat()
+
+    @staticmethod
     def _fallback_razao(evento) -> str:
         razao = (evento.razao_restricao or "").strip().lower()
         if razao:
@@ -54,7 +60,8 @@ class FinanceiroService:
         return "indefinido"
 
     def calcular_perda(self, usina_id: str, inicio: datetime, fim: datetime) -> dict:
-        cache_key = f"financeiro:perda:{usina_id}:{inicio.isoformat()}:{fim.isoformat()}"
+        inicio_key, fim_key = self._cache_range_bucket(inicio, fim)
+        cache_key = f"financeiro:perda:{usina_id}:{inicio_key}:{fim_key}"
         if self.cache:
             cached = self.cache.get(cache_key)
             if cached is not None:
@@ -138,7 +145,8 @@ class FinanceiroService:
         return out
 
     def calcular_perda_resumida(self, usina_id: str, inicio: datetime, fim: datetime) -> dict:
-        cache_key = f"financeiro:perda_resumo:{usina_id}:{inicio.isoformat()}:{fim.isoformat()}"
+        inicio_key, fim_key = self._cache_range_bucket(inicio, fim)
+        cache_key = f"financeiro:perda_resumo:{usina_id}:{inicio_key}:{fim_key}"
         if self.cache:
             cached = self.cache.get(cache_key)
             if cached is not None:

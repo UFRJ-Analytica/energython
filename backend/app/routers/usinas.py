@@ -5,15 +5,16 @@ from fastapi import APIRouter, Depends, Query
 from app.deps import get_curtailment_service, get_financeiro_service, get_repo
 from app.domain.policies import RegulatorioPolicy
 from app.repositories.base import BaseRepository
-
 from app.schemas.curtailment import RiscoDetalhadoOut, RiscoOut
-from app.services.forecasting_utils import forecast_future_losses
 from app.schemas.usinas import UsinaListOut, UsinaOut, UsinaResumoOut
+from app.utils.simple_cache import TTLCache
 from app.utils.datetime_utils import DateRangeError, parse_range
 from app.utils.http_errors import api_error
 
 
 router = APIRouter(prefix="/api", tags=["usinas"])
+usinas_list_cache = TTLCache(ttl_seconds=900)
+usina_detail_cache = TTLCache(ttl_seconds=900)
 
 
 @router.get("/usinas", response_model=UsinaListOut)
@@ -24,8 +25,13 @@ def listar_usinas(
     offset: int = Query(default=0, ge=0),
     repo: BaseRepository = Depends(get_repo),
 ):
+    cache_key = f"usinas:list:{fonte or ''}:{submercado or ''}:{limit}:{offset}"
+    cached = usinas_list_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     data = repo.list_usinas(fonte=fonte, submercado=submercado)
-    return {
+    out = {
         "total_count": len(data),
         "limit": limit,
         "offset": offset,
@@ -37,13 +43,21 @@ def listar_usinas(
         },
         "items": data[offset : offset + limit],
     }
+    usinas_list_cache.set(cache_key, out)
+    return out
 
 
 @router.get("/usinas/{usina_id}", response_model=UsinaOut)
 def detalhar_usina(usina_id: str, repo: BaseRepository = Depends(get_repo)):
+    cache_key = f"usinas:detail:{usina_id}"
+    cached = usina_detail_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     usina = repo.get_usina(usina_id)
     if not usina:
         raise api_error(404, "usina_nao_encontrada", "Usina não encontrada")
+    usina_detail_cache.set(cache_key, usina)
     return usina
 
 
@@ -55,16 +69,14 @@ def resumo_usina(
     repo: BaseRepository = Depends(get_repo),
     financeiro=Depends(get_financeiro_service),
 ):
-    usina = repo.get_usina(usina_id)
-    if not usina:
-        raise api_error(404, "usina_nao_encontrada", "Usina não encontrada")
+    usina = detalhar_usina(usina_id, repo)
 
     if inicio is None or fim is None:
         fim_dt = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
-        inicio_dt = fim_dt - timedelta(days=14)
+        inicio_dt = fim_dt - timedelta(days=30)
     else:
         try:
-            inicio_dt, fim_dt = parse_range(inicio, fim, max_dias=120)
+            inicio_dt, fim_dt = parse_range(inicio, fim, max_dias=90)
         except DateRangeError as exc:
             raise api_error(422, "parametro_data_invalido", str(exc))
 

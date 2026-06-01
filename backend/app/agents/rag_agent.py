@@ -21,12 +21,20 @@ class RagAgent:
         contexto = "\n\n".join(trechos[:3]) if trechos else ""
         return contexto, fontes
 
-    def consultar(self, pergunta: str) -> dict:
+    def consultar(self, pergunta: str, contexto_operacional: str | None = None) -> dict:
         contexto, fontes = self._buscar_trechos(pergunta)
         if not contexto:
             return {"resposta": "Não encontrei base normativa suficiente no contexto local.", "fontes": []}
 
-        system = "Responda apenas com base no contexto regulatório fornecido. Se faltar base, diga explicitamente."
-        user = f"Pergunta: {pergunta}\n\nContexto:\n{contexto}"
+        system = (
+            "Você é um Assistente de IA para curtailment e ressarcimento no setor elétrico. "
+            "Use a base regulatória fornecida + contexto operacional da usina quando disponível. "
+            "Se faltar base normativa, diga explicitamente. Diferencie claramente histórico vs previsão."
+        )
+        user = (
+            f"Pergunta: {pergunta}\n\n"
+            f"Contexto regulatório:\n{contexto}\n\n"
+            f"Contexto operacional da usina:\n{contexto_operacional or 'não informado'}"
+        )
         resposta = self.llm_client.complete(system=system, user=user, model=self.model, max_tokens=900)
         return {"resposta": resposta, "fontes": fontes}

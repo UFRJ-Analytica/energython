@@ -14,6 +14,28 @@ class _RepoSemPld(MockRepository):
         return base
 
 
+class _RepoCodRazaoFallback(MockRepository):
+    def get_constrained_off(self, usina_id: str, inicio: datetime, fim: datetime):
+        return [
+            {
+                "usina_id": usina_id,
+                "timestamp": datetime.fromisoformat("2026-05-01T12:00:00"),
+                "energia_restringida_mwh": 10.0,
+                "razao_restricao": None,
+                "cod_razaorestricao": "RE-LIM",
+                "submercado": "NE",
+            },
+            {
+                "usina_id": usina_id,
+                "timestamp": datetime.fromisoformat("2026-05-01T13:00:00"),
+                "energia_restringida_mwh": 10.0,
+                "razao_restricao": None,
+                "cod_razaorestricao": "SE-OP",
+                "submercado": "NE",
+            },
+        ]
+
+
 class TestFinanceiroService(unittest.TestCase):
     def setUp(self):
         self.repo = MockRepository(mvp_only_nordeste=True)
@@ -60,6 +82,17 @@ class TestFinanceiroService(unittest.TestCase):
         )
         self.assertEqual(out["total_perda_reais"], 0.0)
         self.assertEqual(out["qualidade_dados"]["status"], "sem_pld")
+
+    def test_fallback_razao_por_codigo_reduz_indefinido(self):
+        svc = FinanceiroService(_RepoCodRazaoFallback(mvp_only_nordeste=True))
+        out = svc.calcular_perda(
+            "USI_NE_001",
+            datetime.fromisoformat("2026-05-01T00:00:00"),
+            datetime.fromisoformat("2026-05-02T00:00:00"),
+        )
+        self.assertIn("restricao_eletrica", out["por_razao"])
+        self.assertIn("seguranca_eletroenergetica", out["por_razao"])
+        self.assertNotIn("indefinido", out["por_razao"])
 
 
 if __name__ == "__main__":

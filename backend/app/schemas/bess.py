@@ -15,3 +15,4 @@ class BessSimularOut(BaseModel):
     percentual_mitigado: float
     capex: float | None = None
     payback_anos: float | None = None
+    dimensionamento_com_previsao: dict | None = None

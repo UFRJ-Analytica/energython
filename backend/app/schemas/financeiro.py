@@ -33,3 +33,14 @@ class ExposicaoOut(BaseModel):
     horizonte_horas: int
     exposicao_estimada_reais: float
     premissas: dict
+    serie_previsao: list[dict] = []
+
+
+class PrevisaoPerdasOut(BaseModel):
+    usina_id: str
+    metodo_previsao: str
+    horizonte_horas: int
+    historico_horas: int
+    resumo: dict
+    serie_historico: list[dict] = []
+    serie_previsao: list[dict] = []

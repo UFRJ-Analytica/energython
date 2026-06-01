@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.deps import get_bess_service, get_financeiro_service
 from app.schemas.bess import BessSimularIn, BessSimularOut
-from app.schemas.financeiro import ExposicaoOut, PerdaOut
+from app.schemas.financeiro import ExposicaoOut, PerdaOut, PrevisaoPerdasOut
 from app.utils.datetime_utils import DateRangeError, parse_range
 from app.utils.http_errors import api_error
 
@@ -41,6 +41,23 @@ def exposicao(
 ):
     try:
         return service.projetar_exposicao(usina_id, horizonte_horas=horizonte)
+    except ValueError:
+        raise api_error(404, "usina_nao_encontrada", "Usina não encontrada")
+
+
+@router.get("/usinas/{usina_id}/previsao-perdas", response_model=PrevisaoPerdasOut)
+def previsao_perdas(
+    usina_id: str,
+    horizonte: int = Query(default=48, ge=1, le=720),
+    historico_horas: int = Query(default=168, ge=24, le=2160),
+    service=Depends(get_financeiro_service),
+):
+    try:
+        return service.previsao_perdas_detalhada(
+            usina_id=usina_id,
+            horizonte_horas=horizonte,
+            historico_horas=historico_horas,
+        )
     except ValueError:
         raise api_error(404, "usina_nao_encontrada", "Usina não encontrada")
 

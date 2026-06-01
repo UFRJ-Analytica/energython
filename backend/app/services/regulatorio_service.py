@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.domain.contracts import parse_constrained_off, parse_pld
 from app.domain.policies import RegulatorioPolicy
@@ -383,5 +383,33 @@ class RegulatorioService:
 
         raise ValueError("formato_exportacao_invalido")
 
-    def consultar_regra(self, pergunta: str) -> dict:
-        return self.rag_agent.consultar(pergunta)
+    def consultar_regra(
+        self,
+        pergunta: str,
+        usina_id: str | None = None,
+        inicio: datetime | None = None,
+        fim: datetime | None = None,
+    ) -> dict:
+        contexto_operacional = ""
+        if usina_id:
+            usina = self.repo.get_usina(usina_id)
+            if usina:
+                fim_ctx = fim or datetime.utcnow()
+                inicio_ctx = inicio or (fim_ctx.replace(tzinfo=None) - timedelta(days=30))
+                try:
+                    perda = self.financeiro_service.calcular_perda(usina_id, inicio_ctx, fim_ctx)
+                    eleg = self.classificar_eventos(usina_id, inicio_ctx, fim_ctx, usar_ia_classificacao=False)
+                    contexto_operacional = (
+                        f"Usina: {usina.get('usina_id')} - {usina.get('nome')} | fonte={usina.get('fonte')} | submercado={usina.get('submercado')}\n"
+                        f"Período histórico analisado: {inicio_ctx.isoformat()} até {fim_ctx.isoformat()}\n"
+                        f"Histórico: corte_total_mwh={perda.get('total_energia_restringida_mwh')} | perda_total_reais={perda.get('total_perda_reais')} | eventos={len(perda.get('serie', []))}\n"
+                        f"Regulatório: potencial_ressarcivel_reais={eleg.get('total_potencial_ressarcivel_reais')} | pos_franquia_reais={eleg.get('total_ressarcivel_pos_franquia_reais')}\n"
+                        "Observação: os números acima são históricos; projeções devem ser explicitamente marcadas como previsão."
+                    )
+                except Exception:
+                    contexto_operacional = (
+                        f"Usina: {usina.get('usina_id')} - {usina.get('nome')} | fonte={usina.get('fonte')} | submercado={usina.get('submercado')}\n"
+                        "Resumo operacional histórico indisponível no momento."
+                    )
+
+        return self.rag_agent.consultar(pergunta, contexto_operacional=contexto_operacional)

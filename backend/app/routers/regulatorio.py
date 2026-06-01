@@ -88,4 +88,19 @@ def fluxo_ressarcimento(usina_id: str, body: FluxoRessarcimentoIn, service=Depen
 
 @router.post("/regulatorio/consulta", response_model=ConsultaRegulatoriaOut)
 def consulta(body: ConsultaRegulatoriaIn, service=Depends(get_regulatorio_service)):
-    return service.consultar_regra(body.pergunta)
+    inicio_dt = None
+    fim_dt = None
+    if body.inicio and body.fim:
+        try:
+            inicio_dt, fim_dt = parse_range(body.inicio, body.fim)
+        except DateRangeError as exc:
+            raise api_error(422, "parametro_data_invalido", str(exc))
+
+    out = service.consultar_regra(
+        pergunta=body.pergunta,
+        usina_id=body.usina_id,
+        inicio=inicio_dt,
+        fim=fim_dt,
+    )
+    out["agente"] = "assistente_ia"
+    return out

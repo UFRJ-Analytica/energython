@@ -92,8 +92,12 @@ class FluxoRessarcimentoOut(BaseModel):
 
 class ConsultaRegulatoriaIn(BaseModel):
     pergunta: str
+    usina_id: str | None = None
+    inicio: str | None = None
+    fim: str | None = None
 
 
 class ConsultaRegulatoriaOut(BaseModel):
+    agente: str = "assistente_ia"
     resposta: str
     fontes: list[str]

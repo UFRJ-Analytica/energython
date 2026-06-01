@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.deps import get_financeiro_service, get_regulatorio_service, get_repo
 from app.repositories.base import BaseRepository
+from app.services.forecasting_utils import forecast_future_losses
 from app.schemas.usinas import UsinaListOut, UsinaOut, UsinaResumoOut
 from app.utils.datetime_utils import DateRangeError, parse_iso_datetime, parse_range
 from app.utils.http_errors import api_error
@@ -72,13 +73,19 @@ def resumo_usina(
     ticket_medio = (total_perda / total_eventos) if total_eventos else 0.0
     perc_ress = (eleg["total_potencial_ressarcivel_reais"] / total_perda * 100.0) if total_perda > 0 else 0.0
 
-    dias_janela = max((fim_dt - inicio_dt).total_seconds() / 86400.0, 1.0)
-    perda_media_diaria = total_perda / dias_janela if total_perda > 0 else 0.0
+    previsao_30d = forecast_future_losses(
+        repo=repo,
+        usina=usina,
+        horizon_hours=24 * 30,
+    )
     perda_esperada_30d = {
-        "valor_reais": round(perda_media_diaria * 30.0, 2),
+        "valor_reais": round(previsao_30d["perda_total_prevista_reais"], 2),
         "horizonte_dias": 30,
-        "metodo": "media_diaria_historica",
-        "observacao": "Estimativa baseada na média diária observada no período selecionado.",
+        "metodo": previsao_30d["metodo_previsao"],
+        "observacao": (
+            "Previsão futura baseada em modelo ML quando disponível; "
+            "fallback sazonal por hora/weekday quando necessário."
+        ),
     }
 
     return {

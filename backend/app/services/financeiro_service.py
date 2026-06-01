@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import unicodedata
 
 from app.domain.contracts import parse_constrained_off, parse_pld
 from app.domain.policies import FinanceiroPolicy
+from app.services.forecasting_utils import build_historical_vs_forecast_losses, forecast_future_losses
 from app.utils.datetime_utils import ts_keys
 from app.utils.logging_utils import log_json
 
@@ -12,6 +14,43 @@ class FinanceiroService:
     def __init__(self, repo, policy: FinanceiroPolicy | None = None):
         self.repo = repo
         self.policy = policy or FinanceiroPolicy.default()
+
+    @staticmethod
+    def _fallback_razao(evento) -> str:
+        razao = (evento.razao_restricao or "").strip().lower()
+        if razao:
+            return razao
+
+        cod = (evento.cod_razaorestricao or "").strip().upper().replace("-", "_")
+        cod_map = {
+            "CF": "confiabilidade",
+            "CONFIAB": "confiabilidade",
+            "IE": "indisponibilidade_externa",
+            "INDISP_EXT": "indisponibilidade_externa",
+            "EN": "energetico",
+            "ENER": "energetico",
+            "RE": "restricao_eletrica",
+            "ELE": "restricao_eletrica",
+            "SE": "seguranca_eletroenergetica",
+            "SEG": "seguranca_eletroenergetica",
+        }
+        for prefixo, classificacao in cod_map.items():
+            if cod.startswith(prefixo):
+                return classificacao
+
+        texto = (evento.razao_restricao or "").strip().lower()
+        texto = "".join(c for c in unicodedata.normalize("NFKD", texto) if not unicodedata.combining(c))
+        if any(k in texto for k in ["confiab", "confiabilidade"]):
+            return "confiabilidade"
+        if any(k in texto for k in ["indisponibilidade", "externa"]):
+            return "indisponibilidade_externa"
+        if any(k in texto for k in ["energet", "energia"]):
+            return "energetico"
+        if any(k in texto for k in ["restricao eletrica", "eletrica", "rede"]):
+            return "restricao_eletrica"
+        if any(k in texto for k in ["seguranca", "eletroenergetica"]):
+            return "seguranca_eletroenergetica"
+        return "indefinido"
 
     def calcular_perda(self, usina_id: str, inicio: datetime, fim: datetime) -> dict:
         usina = self.repo.get_usina(usina_id)
@@ -40,7 +79,7 @@ class FinanceiroService:
                 pld_faltante_eventos += 1
                 preco = 0.0
             perda = energia * preco
-            razao = e.razao_restricao or "indefinido"
+            razao = self._fallback_razao(e)
             total_perda += perda
             total_energia += energia
             por_razao[razao] = por_razao.get(razao, 0.0) + perda
@@ -89,31 +128,54 @@ class FinanceiroService:
         }
 
     def projetar_exposicao(self, usina_id: str, horizonte_horas: int = 48) -> dict:
-        agora = datetime.now(timezone.utc).replace(tzinfo=None)
-        inicio_hist = agora - timedelta(days=30)
         usina = self.repo.get_usina(usina_id)
         if not usina:
             raise ValueError("usina_nao_encontrada")
+        previsao = forecast_future_losses(
+            repo=self.repo,
+            usina=usina,
+            horizon_hours=horizonte_horas,
+        )
 
+        agora = datetime.now(timezone.utc).replace(tzinfo=None)
+        inicio_hist = agora - timedelta(days=30)
         eventos_hist = parse_constrained_off(self.repo.get_constrained_off(usina_id, inicio_hist, agora))
         pld_hist = parse_pld(self.repo.get_pld(usina["submercado"], inicio_hist, agora))
+        energia_media_hora_hist = (
+            sum(e.energia_restringida_mwh for e in eventos_hist) / len(eventos_hist) if eventos_hist else 0.0
+        )
+        pld_medio_hist = sum(p.pld_reais_mwh for p in pld_hist) / len(pld_hist) if pld_hist else 0.0
 
-        energia_media_hora = 0.0
-        if eventos_hist:
-            energia_media_hora = sum(e.energia_restringida_mwh for e in eventos_hist) / len(eventos_hist)
-
-        pld_medio = 0.0
-        if pld_hist:
-            pld_medio = sum(p.pld_reais_mwh for p in pld_hist) / len(pld_hist)
-
-        exposicao = energia_media_hora * pld_medio * horizonte_horas
         return {
             "usina_id": usina_id,
             "horizonte_horas": horizonte_horas,
-            "exposicao_estimada_reais": round(exposicao, 2),
+            "exposicao_estimada_reais": round(previsao["perda_total_prevista_reais"], 2),
             "premissas": {
-                "energia_media_restringida_mwh_por_hora": round(energia_media_hora, 4),
-                "pld_medio_reais_mwh": round(pld_medio, 4),
-                "metodo": self.policy.metodo_exposicao,
+                "historico_ultimos_30d": {
+                    "energia_media_restringida_mwh_por_hora": round(energia_media_hora_hist, 4),
+                    "pld_medio_reais_mwh": round(pld_medio_hist, 4),
+                    "tipo_dado": "historico",
+                },
+                "previsao_futura": {
+                    "metodo": previsao["metodo_previsao"],
+                    "tipo_dado": "previsao",
+                    "energia_total_prevista_mwh": previsao["energia_total_prevista_mwh"],
+                    "perda_total_prevista_reais": previsao["perda_total_prevista_reais"],
+                },
+                "metodo_legacy": self.policy.metodo_exposicao,
             },
+            "serie_previsao": previsao["serie_previsao"],
         }
+
+    def previsao_perdas_detalhada(self, usina_id: str, horizonte_horas: int = 48, historico_horas: int = 168) -> dict:
+        usina = self.repo.get_usina(usina_id)
+        if not usina:
+            raise ValueError("usina_nao_encontrada")
+        out = build_historical_vs_forecast_losses(
+            repo=self.repo,
+            usina=usina,
+            horizonte_horas=horizonte_horas,
+            historico_horas=historico_horas,
+        )
+        out["usina_id"] = usina_id
+        return out

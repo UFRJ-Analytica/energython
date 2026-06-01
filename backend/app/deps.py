@@ -12,7 +12,6 @@ from app.database import get_db_session
 from app.repositories.base import BaseRepository
 from app.repositories.mock_repo import MockRepository
 from app.services.bess_service import BessService
-from app.services.curtailment_service import CurtailmentService
 from app.services.financeiro_service import FinanceiroService
 from app.services.regulatorio_service import RegulatorioService
 from app.utils.simple_cache import TTLCache
@@ -38,7 +37,9 @@ def get_bess_service(repo: BaseRepository = Depends(get_repo)) -> BessService:
 
 def get_curtailment_service(
     repo: BaseRepository = Depends(get_repo), settings: Settings = Depends(get_settings)
-) -> CurtailmentService:
+) -> "CurtailmentService":
+    from app.services.curtailment_service import CurtailmentService
+
     return CurtailmentService(repo, model_path=settings.curtailment_model_path)
 
 

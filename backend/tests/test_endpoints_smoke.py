@@ -130,6 +130,18 @@ class TestEndpointsSmoke(unittest.TestCase):
         self.assertEqual(r.status_code, 422)
         self.assertEqual(r.json()["detail"]["code"], "formato_exportacao_invalido")
 
+    def test_previsao_perdas_diferencia_historico_e_previsao(self):
+        r = self.client.get("/api/usinas/USI_NE_001/previsao-perdas?horizonte=24&historico_horas=48")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("serie_historico", body)
+        self.assertIn("serie_previsao", body)
+        self.assertIn("resumo", body)
+        if body["serie_historico"]:
+            self.assertEqual(body["serie_historico"][0]["tipo_dado"], "historico")
+        if body["serie_previsao"]:
+            self.assertEqual(body["serie_previsao"][0]["tipo_dado"], "previsao")
+
 
 if __name__ == "__main__":
     unittest.main()

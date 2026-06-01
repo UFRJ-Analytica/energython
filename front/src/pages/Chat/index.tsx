@@ -8,9 +8,9 @@ import { ErrorState } from "@/components/shared/ErrorState"
 import { useConsulta } from "@/hooks/useRegulatorio"
 
 const SUGESTOES = [
-  "Cortes por razão energética são elegíveis a ressarcimento?",
-  "O que diz a Lei 15.269/2025 sobre geração distribuída?",
-  "Quais são os prazos para protocolar um pleito na CCEE?",
+  "Com base no período selecionado, qual foi a principal razão de corte desta usina?",
+  "Como a perda financeira desta usina se divide entre histórico e previsão futura?",
+  "No cenário atual, qual configuração de BESS tende a capturar mais perda evitável?",
 ]
 
 export default function Chat() {
@@ -26,10 +26,10 @@ export default function Chat() {
   return (
     <div className="container mx-auto max-w-2xl px-6 py-10">
       <div className="mb-8">
-        <p className="text-xs font-medium uppercase tracking-widest text-teal-500">Consulta Regulatória</p>
-        <h2 className="mt-0.5 text-xl font-bold">Assistente de Normas</h2>
+        <p className="text-xs font-medium uppercase tracking-widest text-teal-500">Curtail AI</p>
+        <h2 className="mt-0.5 text-xl font-bold">Assistente de IA</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tire dúvidas sobre REN 1.030/2022 e Lei 15.269/2025 com fontes citadas.
+          Tire dúvidas sobre curtailment, ressarcimento e operação da usina com respostas fundamentadas.
         </p>
       </div>
 
@@ -71,7 +71,7 @@ export default function Chat() {
         className="flex gap-2"
       >
         <Textarea
-          placeholder="Faça uma pergunta sobre as normas regulatórias…"
+          placeholder="Pergunte sobre curtailment, ressarcimento ou operação da usina…"
           value={pergunta}
           onChange={(e) => setPergunta(e.target.value)}
           rows={2}

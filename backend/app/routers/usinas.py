@@ -2,12 +2,14 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 
-from app.deps import get_financeiro_service, get_regulatorio_service, get_repo
+from app.deps import get_curtailment_service, get_financeiro_service, get_regulatorio_service, get_repo
 from app.repositories.base import BaseRepository
+from app.schemas.curtailment import RiscoDetalhadoOut, RiscoOut
 from app.services.forecasting_utils import forecast_future_losses
 from app.schemas.usinas import UsinaListOut, UsinaOut, UsinaResumoOut
-from app.utils.datetime_utils import DateRangeError, parse_iso_datetime, parse_range
+from app.utils.datetime_utils import DateRangeError, parse_range
 from app.utils.http_errors import api_error
+
 
 router = APIRouter(prefix="/api", tags=["usinas"])
 
@@ -103,3 +105,21 @@ def resumo_usina(
         },
         "perda_esperada_30d": perda_esperada_30d,
     }
+
+
+@router.get("/usinas/{usina_id}/risco-corte", response_model=RiscoOut)
+def risco_corte(
+    usina_id: str,
+    horizonte: int = Query(default=48, ge=1, le=720),
+    service=Depends(get_curtailment_service),
+):
+    return service.prever_risco(usina_id, horizonte_horas=horizonte)
+
+
+@router.get("/usinas/{usina_id}/curtailment/previsao-detalhada", response_model=RiscoDetalhadoOut)
+def previsao_detalhada_curtailment(
+    usina_id: str,
+    horizonte: int = Query(default=48, ge=1, le=720),
+    service=Depends(get_curtailment_service),
+):
+    return service.prever_risco_detalhado(usina_id, horizonte_horas=horizonte)

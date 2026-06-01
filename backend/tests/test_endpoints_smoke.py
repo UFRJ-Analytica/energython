@@ -142,6 +142,15 @@ class TestEndpointsSmoke(unittest.TestCase):
         if body["serie_previsao"]:
             self.assertEqual(body["serie_previsao"][0]["tipo_dado"], "previsao")
 
+    def test_curtailment_previsao_detalhada(self):
+        r = self.client.get("/api/usinas/USI_NE_001/curtailment/previsao-detalhada?horizonte=24")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIn("modelo", body)
+        self.assertIn("previsoes", body)
+        self.assertIn("resumo", body)
+        self.assertEqual(body["tipo_dado"], "previsao")
+
 
 if __name__ == "__main__":
     unittest.main()

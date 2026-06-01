@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     anthropic_model_smart: str = "claude-sonnet-4-5"
     mvp_only_nordeste: bool = True
     curtailment_model_path: str = "models_ml/curtailment_model.pkl"
+    curtailment_model_mode: str = "auto"  # auto | base | advanced
+    curtailment_model_advanced_path: str = "models_ml/curtailment_model_advanced.pkl"
+    curtailment_advanced_module_path: str = "models_ml/data_ml/models.py"
     curtailment_threshold_mwh: float = 1.0
 
     # Regras de elegibilidade regulatória (parametrizáveis por ambiente)
@@ -28,6 +31,13 @@ class Settings(BaseSettings):
     def validate_backend(cls, v: str) -> str:
         if v not in {"mock", "postgres"}:
             raise ValueError("DATA_BACKEND must be 'mock' or 'postgres'")
+        return v
+
+    @field_validator("curtailment_model_mode")
+    @classmethod
+    def validate_curtailment_model_mode(cls, v: str) -> str:
+        if v not in {"auto", "base", "advanced"}:
+            raise ValueError("CURTAILMENT_MODEL_MODE must be 'auto', 'base' or 'advanced'")
         return v
 
     @field_validator("regulatorio_policy_version")

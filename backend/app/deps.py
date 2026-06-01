@@ -40,7 +40,13 @@ def get_curtailment_service(
 ) -> "CurtailmentService":
     from app.services.curtailment_service import CurtailmentService
 
-    return CurtailmentService(repo, model_path=settings.curtailment_model_path)
+    return CurtailmentService(
+        repo,
+        model_path=settings.curtailment_model_path,
+        model_mode=settings.curtailment_model_mode,
+        advanced_model_path=settings.curtailment_model_advanced_path,
+        advanced_module_path=settings.curtailment_advanced_module_path,
+    )
 
 
 def get_regulatorio_service(

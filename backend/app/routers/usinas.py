@@ -2,8 +2,10 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 
-from app.deps import get_curtailment_service, get_financeiro_service, get_regulatorio_service, get_repo
+from app.deps import get_curtailment_service, get_financeiro_service, get_repo
+from app.domain.policies import RegulatorioPolicy
 from app.repositories.base import BaseRepository
+
 from app.schemas.curtailment import RiscoDetalhadoOut, RiscoOut
 from app.services.forecasting_utils import forecast_future_losses
 from app.schemas.usinas import UsinaListOut, UsinaOut, UsinaResumoOut
@@ -52,38 +54,38 @@ def resumo_usina(
     fim: str | None = Query(default=None),
     repo: BaseRepository = Depends(get_repo),
     financeiro=Depends(get_financeiro_service),
-    regulatorio=Depends(get_regulatorio_service),
 ):
     usina = repo.get_usina(usina_id)
     if not usina:
         raise api_error(404, "usina_nao_encontrada", "Usina não encontrada")
 
     if inicio is None or fim is None:
-        fim_dt = datetime.utcnow()
-        inicio_dt = fim_dt - timedelta(days=30)
+        fim_dt = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+        inicio_dt = fim_dt - timedelta(days=14)
     else:
         try:
-            inicio_dt, fim_dt = parse_range(inicio, fim)
+            inicio_dt, fim_dt = parse_range(inicio, fim, max_dias=120)
         except DateRangeError as exc:
             raise api_error(422, "parametro_data_invalido", str(exc))
 
-    perda = financeiro.calcular_perda(usina_id, inicio_dt, fim_dt)
-    eleg = regulatorio.classificar_eventos(usina_id, inicio_dt, fim_dt, usar_ia_classificacao=False)
+    perda = financeiro.calcular_perda_resumida(usina_id, inicio_dt, fim_dt)
+    policy = RegulatorioPolicy.default()
 
     total_perda = perda["total_perda_reais"]
-    total_eventos = len(perda["serie"])
+    total_eventos = int(perda.get("total_eventos") or 0)
     ticket_medio = (total_perda / total_eventos) if total_eventos else 0.0
-    perc_ress = (eleg["total_potencial_ressarcivel_reais"] / total_perda * 100.0) if total_perda > 0 else 0.0
-
-    previsao_30d = forecast_future_losses(
-        repo=repo,
-        usina=usina,
-        horizon_hours=24 * 30,
+    perda_ressarcivel = sum(
+        float(v or 0.0)
+        for razao, v in (perda.get("por_razao") or {}).items()
+        if policy.is_elegivel(str(razao))
     )
+    perc_ress = (perda_ressarcivel / total_perda * 100.0) if total_perda > 0 else 0.0
+
+    exposicao_prevista_30d = financeiro.projetar_exposicao(usina_id, horizonte_horas=24 * 30)
     perda_esperada_30d = {
-        "valor_reais": round(previsao_30d["perda_total_prevista_reais"], 2),
+        "valor_reais": round(exposicao_prevista_30d["exposicao_estimada_reais"], 2),
         "horizonte_dias": 30,
-        "metodo": previsao_30d["metodo_previsao"],
+        "metodo": exposicao_prevista_30d.get("premissas", {}).get("previsao_futura", {}).get("metodo", "fallback_sazonal"),
         "observacao": (
             "Previsão futura baseada em modelo ML quando disponível; "
             "fallback sazonal por hora/weekday quando necessário."

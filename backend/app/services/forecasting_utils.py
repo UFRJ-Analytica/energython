@@ -77,6 +77,7 @@ def forecast_future_losses(
     usina: dict,
     horizon_hours: int = 48,
     ml_model_path: str = "models_ml/curtailment_model.pkl",
+    use_ml: bool = False,
 ) -> dict:
     now = datetime.now(timezone.utc).replace(tzinfo=None, minute=0, second=0, microsecond=0)
     hist_start = now - timedelta(days=30)
@@ -89,48 +90,51 @@ def forecast_future_losses(
 
     method = "fallback_sazonal"
 
-    try:
-        from app.ml.features import build_inference_frame
-        from app.ml.predictor import CurtailmentPredictor
+    if use_ml:
+        try:
+            from app.ml.features import build_inference_frame
+            from app.ml.predictor import CurtailmentPredictor
 
-        predictor = CurtailmentPredictor(ml_model_path)
-        clima_future = repo.get_clima_horario(usina["usina_id"], now, now + timedelta(hours=horizon_hours), is_forecast=True)
-        geracao_recent = repo.get_geracao_horaria(usina["usina_id"], now - timedelta(hours=48), now)
-        constrained_recent = repo.get_constrained_off(usina["usina_id"], now - timedelta(hours=48), now)
-        disponibilidade_recent = repo.get_disponibilidade_usina(usina["usina_id"], now - timedelta(hours=48), now)
-        dessem_recent = repo.get_despacho_dessem(usina["usina_id"], now - timedelta(hours=48), now)
-        garantia_fisica_recent = repo.get_garantia_fisica(usina["usina_id"], now - timedelta(hours=48), now)
+            predictor = CurtailmentPredictor(ml_model_path)
+            clima_future = repo.get_clima_horario(usina["usina_id"], now, now + timedelta(hours=horizon_hours), is_forecast=True)
+            geracao_recent = repo.get_geracao_horaria(usina["usina_id"], now - timedelta(hours=48), now)
+            constrained_recent = repo.get_constrained_off(usina["usina_id"], now - timedelta(hours=48), now)
+            disponibilidade_recent = repo.get_disponibilidade_usina(usina["usina_id"], now - timedelta(hours=48), now)
+            dessem_recent = repo.get_despacho_dessem(usina["usina_id"], now - timedelta(hours=48), now)
+            garantia_fisica_recent = repo.get_garantia_fisica(usina["usina_id"], now - timedelta(hours=48), now)
 
-        if clima_future:
-            feat_df = build_inference_frame(
-                usina=usina,
-                clima_future=clima_future,
-                geracao_recent=geracao_recent,
-                constrained_recent=constrained_recent,
-                pld_recent=repo.get_pld(usina["submercado"], now - timedelta(hours=48), now),
-                disponibilidade_recent=disponibilidade_recent,
-                dessem_recent=dessem_recent,
-                garantia_fisica_recent=garantia_fisica_recent,
-            )
-            ml_preds = predictor.predict(feat_df)
-            if ml_preds:
-                method = "ml_base_random_forest"
-                energy_forecast = []
-                for p in ml_preds[:horizon_hours]:
-                    ts = datetime.fromisoformat(str(p["timestamp"]).replace("Z", "+00:00")).replace(tzinfo=None)
-                    energy_forecast.append(
-                        {
-                            "timestamp": ts,
-                            "energia_prevista_mwh": max(0.0, float(p.get("magnitude_estimada_mwh", 0.0) or 0.0)),
-                            "prob_corte": float(p.get("prob_corte", 0.0) or 0.0),
-                            "fonte": "ml",
-                        }
-                    )
+            if clima_future:
+                feat_df = build_inference_frame(
+                    usina=usina,
+                    clima_future=clima_future,
+                    geracao_recent=geracao_recent,
+                    constrained_recent=constrained_recent,
+                    pld_recent=repo.get_pld(usina["submercado"], now - timedelta(hours=48), now),
+                    disponibilidade_recent=disponibilidade_recent,
+                    dessem_recent=dessem_recent,
+                    garantia_fisica_recent=garantia_fisica_recent,
+                )
+                ml_preds = predictor.predict(feat_df)
+                if ml_preds:
+                    method = "ml_base_random_forest"
+                    energy_forecast = []
+                    for p in ml_preds[:horizon_hours]:
+                        ts = datetime.fromisoformat(str(p["timestamp"]).replace("Z", "+00:00")).replace(tzinfo=None)
+                        energy_forecast.append(
+                            {
+                                "timestamp": ts,
+                                "energia_prevista_mwh": max(0.0, float(p.get("magnitude_estimada_mwh", 0.0) or 0.0)),
+                                "prob_corte": float(p.get("prob_corte", 0.0) or 0.0),
+                                "fonte": "ml",
+                            }
+                        )
+                else:
+                    energy_forecast = _build_energy_seasonal_forecast(eventos_hist, horizon_hours, now)
             else:
                 energy_forecast = _build_energy_seasonal_forecast(eventos_hist, horizon_hours, now)
-        else:
+        except Exception:
             energy_forecast = _build_energy_seasonal_forecast(eventos_hist, horizon_hours, now)
-    except Exception:
+    else:
         energy_forecast = _build_energy_seasonal_forecast(eventos_hist, horizon_hours, now)
 
     series = []

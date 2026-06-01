@@ -108,3 +108,6 @@ class MockRepository(BaseRepository):
     def get_garantia_fisica(self, usina_id: str, inicio: datetime, fim: datetime):
         # Preparado para séries de garantia física/sazonalização quando entrarem no gold.
         return []
+
+    def get_perda_resumida(self, usina_id: str, submercado: str, inicio: datetime, fim: datetime):
+        return None

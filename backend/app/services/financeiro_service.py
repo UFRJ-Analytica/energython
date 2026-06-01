@@ -11,9 +11,10 @@ from app.utils.logging_utils import log_json
 
 
 class FinanceiroService:
-    def __init__(self, repo, policy: FinanceiroPolicy | None = None):
+    def __init__(self, repo, policy: FinanceiroPolicy | None = None, cache=None):
         self.repo = repo
         self.policy = policy or FinanceiroPolicy.default()
+        self.cache = cache
 
     @staticmethod
     def _fallback_razao(evento) -> str:
@@ -53,6 +54,12 @@ class FinanceiroService:
         return "indefinido"
 
     def calcular_perda(self, usina_id: str, inicio: datetime, fim: datetime) -> dict:
+        cache_key = f"financeiro:perda:{usina_id}:{inicio.isoformat()}:{fim.isoformat()}"
+        if self.cache:
+            cached = self.cache.get(cache_key)
+            if cached is not None:
+                return cached
+
         usina = self.repo.get_usina(usina_id)
         if not usina:
             raise ValueError("usina_nao_encontrada")
@@ -108,7 +115,7 @@ class FinanceiroService:
             qualidade_status=status,
         )
 
-        return {
+        out = {
             "usina_id": usina_id,
             "total_perda_reais": round(total_perda, 2),
             "total_energia_restringida_mwh": round(total_energia, 4),
@@ -126,8 +133,70 @@ class FinanceiroService:
             },
             "serie": serie,
         }
+        if self.cache:
+            self.cache.set(cache_key, out)
+        return out
+
+    def calcular_perda_resumida(self, usina_id: str, inicio: datetime, fim: datetime) -> dict:
+        cache_key = f"financeiro:perda_resumo:{usina_id}:{inicio.isoformat()}:{fim.isoformat()}"
+        if self.cache:
+            cached = self.cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+        usina = self.repo.get_usina(usina_id)
+        if not usina:
+            raise ValueError("usina_nao_encontrada")
+
+        agg = self.repo.get_perda_resumida(usina_id=usina_id, submercado=usina["submercado"], inicio=inicio, fim=fim)
+        if agg is None:
+            full = self.calcular_perda(usina_id, inicio, fim)
+            out = {
+                "usina_id": usina_id,
+                "total_perda_reais": float(full["total_perda_reais"]),
+                "total_energia_restringida_mwh": float(full["total_energia_restringida_mwh"]),
+                "por_razao": dict(full.get("por_razao") or {}),
+                "qualidade_dados": dict(full.get("qualidade_dados") or {}),
+                "metadata": dict(full.get("metadata") or {}),
+                "total_eventos": int((full.get("qualidade_dados") or {}).get("total_eventos", len(full.get("serie") or []))),
+            }
+            if self.cache:
+                self.cache.set(cache_key, out)
+            return out
+
+        status = self.policy.classificar_status_qualidade_perda(
+            pld_faltante_eventos=int(agg.get("pld_faltante_eventos") or 0),
+            total_pld_rows=int(agg.get("total_eventos") or 0),
+        )
+        out = {
+            "usina_id": usina_id,
+            "total_perda_reais": round(float(agg.get("total_perda_reais") or 0.0), 2),
+            "total_energia_restringida_mwh": round(float(agg.get("total_energia_restringida_mwh") or 0.0), 4),
+            "por_razao": {str(k): round(float(v or 0.0), 2) for k, v in (agg.get("por_razao") or {}).items()},
+            "qualidade_dados": {
+                "status": status,
+                "pld_faltante_eventos": int(agg.get("pld_faltante_eventos") or 0),
+                "total_eventos": int(agg.get("total_eventos") or 0),
+            },
+            "metadata": {
+                "mvp_scope_applied": True,
+                "mvp_scope": "geradoras_renovaveis_submercado_ne",
+                "api_contract_version": "v1",
+                "data_quality_status": status,
+            },
+            "total_eventos": int(agg.get("total_eventos") or 0),
+        }
+        if self.cache:
+            self.cache.set(cache_key, out)
+        return out
 
     def projetar_exposicao(self, usina_id: str, horizonte_horas: int = 48) -> dict:
+        cache_key = f"financeiro:exposicao:{usina_id}:{horizonte_horas}"
+        if self.cache:
+            cached = self.cache.get(cache_key)
+            if cached is not None:
+                return cached
+
         usina = self.repo.get_usina(usina_id)
         if not usina:
             raise ValueError("usina_nao_encontrada")
@@ -135,6 +204,7 @@ class FinanceiroService:
             repo=self.repo,
             usina=usina,
             horizon_hours=horizonte_horas,
+            use_ml=False,
         )
 
         agora = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -146,7 +216,7 @@ class FinanceiroService:
         )
         pld_medio_hist = sum(p.pld_reais_mwh for p in pld_hist) / len(pld_hist) if pld_hist else 0.0
 
-        return {
+        out = {
             "usina_id": usina_id,
             "horizonte_horas": horizonte_horas,
             "exposicao_estimada_reais": round(previsao["perda_total_prevista_reais"], 2),
@@ -166,6 +236,9 @@ class FinanceiroService:
             },
             "serie_previsao": previsao["serie_previsao"],
         }
+        if self.cache:
+            self.cache.set(cache_key, out)
+        return out
 
     def previsao_perdas_detalhada(self, usina_id: str, horizonte_horas: int = 48, historico_horas: int = 168) -> dict:
         usina = self.repo.get_usina(usina_id)

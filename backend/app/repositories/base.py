@@ -50,3 +50,10 @@ class BaseRepository(ABC):
     def get_garantia_fisica(self, usina_id: str, inicio: datetime, fim: datetime) -> list[dict[str, Any]]:
         """Série temporal de garantia física/sazonalização da usina (quando existir no gold)."""
         raise NotImplementedError
+
+    def get_perda_resumida(self, usina_id: str, submercado: str, inicio: datetime, fim: datetime) -> dict[str, Any] | None:
+        """Resumo agregado de perda financeira por razão no intervalo.
+
+        Retorna None quando o repositório não suporta agregação SQL nativa.
+        """
+        return None

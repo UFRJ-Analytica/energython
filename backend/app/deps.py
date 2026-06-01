@@ -17,6 +17,7 @@ from app.services.regulatorio_service import RegulatorioService
 from app.utils.simple_cache import TTLCache
 
 regulatorio_cache = TTLCache(ttl_seconds=1800)
+financeiro_cache = TTLCache(ttl_seconds=900)
 
 
 def get_repo(settings: Settings = Depends(get_settings), db=Depends(get_db_session)) -> BaseRepository:
@@ -28,7 +29,7 @@ def get_repo(settings: Settings = Depends(get_settings), db=Depends(get_db_sessi
 
 
 def get_financeiro_service(repo: BaseRepository = Depends(get_repo)) -> FinanceiroService:
-    return FinanceiroService(repo)
+    return FinanceiroService(repo, cache=financeiro_cache)
 
 
 def get_bess_service(repo: BaseRepository = Depends(get_repo)) -> BessService:

@@ -548,3 +548,115 @@ class PostgresRepository(BaseRepository):
         ORDER BY timestamp
         """
         return self._safe_mappings_query(sql, {"usina_id": usina_id, "inicio": inicio, "fim": fim})
+
+    def get_perda_resumida(self, usina_id: str, submercado: str, inicio: datetime, fim: datetime):
+        self._validate_range(inicio, fim)
+        self._assert_usina_exists(usina_id)
+
+        submercado_norm = (submercado or "").upper()
+        submercado_public = {
+            "NE": "NORDESTE",
+            "N": "NORTE",
+            "SE": "SUDESTE",
+            "S": "SUL",
+        }.get(submercado_norm, submercado_norm)
+
+        sql = """
+        WITH co AS (
+            SELECT
+                b.timestamp,
+                b.energia_restringida_mwh,
+                CASE
+                    WHEN b.cod_razaorestricao ILIKE 'CF%' OR b.cod_razaorestricao ILIKE 'CONFIAB%' THEN 'confiabilidade'
+                    WHEN b.cod_razaorestricao ILIKE 'IE%' OR b.cod_razaorestricao ILIKE 'INDISP_EXT%' THEN 'indisponibilidade_externa'
+                    WHEN b.cod_razaorestricao ILIKE 'EN%' OR b.cod_razaorestricao ILIKE 'ENER%' THEN 'energetico'
+                    WHEN b.cod_razaorestricao ILIKE 'RE%' OR b.cod_razaorestricao ILIKE 'ELE%' THEN 'restricao_eletrica'
+                    WHEN b.cod_razaorestricao ILIKE 'SE%' OR b.cod_razaorestricao ILIKE 'SEG%' THEN 'seguranca_eletroenergetica'
+                    ELSE 'indefinido'
+                END AS razao_norm
+            FROM (
+                SELECT
+                    CASE
+                        WHEN pg_typeof(din_instante)::text LIKE 'timestamp%' THEN din_instante::timestamp
+                        ELSE to_timestamp(din_instante, 'YYYY-MM-DD HH24:MI:SS')
+                    END AS timestamp,
+                    GREATEST(
+                        COALESCE(NULLIF(val_geracaoreferenciafinal, '')::double precision, NULLIF(val_geracaoreferencia, '')::double precision, 0)
+                        - COALESCE(NULLIF(val_geracao, '')::double precision, 0),
+                        0
+                    ) AS energia_restringida_mwh,
+                    cod_razaorestricao,
+                    CASE
+                        WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('NE', 'NORDESTE') THEN 'NE'
+                        WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('N', 'NORTE') THEN 'N'
+                        ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
+                    END AS submercado
+                FROM public.restricao_coff_eolica_usi
+                WHERE id_ons = :usina_id
+
+                UNION ALL
+
+                SELECT
+                    din_instante::timestamp AS timestamp,
+                    GREATEST(
+                        COALESCE(val_geracaoreferenciafinal, val_geracaoreferencia, 0)::double precision
+                        - COALESCE(val_geracao, 0)::double precision,
+                        0
+                    ) AS energia_restringida_mwh,
+                    cod_razaorestricao,
+                    CASE
+                        WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('NE', 'NORDESTE') THEN 'NE'
+                        WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('N', 'NORTE') THEN 'N'
+                        ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
+                    END AS submercado
+                FROM public.restricao_coff_fotovoltaica
+                WHERE id_ons = :usina_id
+            ) b
+            WHERE b.timestamp BETWEEN :inicio AND :fim
+              AND b.energia_restringida_mwh > 0
+              AND (:ne_only = false OR b.submercado = 'NE')
+        ),
+        pld AS (
+            SELECT
+                to_timestamp(mes_referencia || LPAD(dia, 2, '0') || LPAD(hora, 2, '0'), 'YYYYMMDDHH24') AS timestamp,
+                NULLIF(REPLACE(pld_hora, ',', '.'), '')::double precision AS pld_reais_mwh
+            FROM public.ccee_pld_horario
+            WHERE UPPER(submercado) = :submercado_public
+        )
+        SELECT
+            co.razao_norm AS razao,
+            COUNT(*)::bigint AS total_eventos,
+            SUM(co.energia_restringida_mwh)::double precision AS total_energia_mwh,
+            SUM(co.energia_restringida_mwh * COALESCE(pld.pld_reais_mwh, 0))::double precision AS total_perda_reais,
+            SUM(CASE WHEN pld.pld_reais_mwh IS NULL THEN 1 ELSE 0 END)::bigint AS pld_faltante_eventos
+        FROM co
+        LEFT JOIN pld ON date_trunc('hour', co.timestamp) = date_trunc('hour', pld.timestamp)
+        GROUP BY co.razao_norm
+        """
+
+        rows = self._safe_mappings_query(
+            sql,
+            {
+                "usina_id": usina_id,
+                "inicio": inicio,
+                "fim": fim,
+                "submercado_public": submercado_public,
+                "ne_only": self.mvp_only_nordeste,
+            },
+        )
+        if not rows:
+            return None
+
+        total_eventos = int(sum(int(r.get("total_eventos") or 0) for r in rows))
+        total_energia = float(sum(float(r.get("total_energia_mwh") or 0.0) for r in rows))
+        total_perda = float(sum(float(r.get("total_perda_reais") or 0.0) for r in rows))
+        pld_faltante = int(sum(int(r.get("pld_faltante_eventos") or 0) for r in rows))
+        por_razao = {str(r.get("razao") or "indefinido"): round(float(r.get("total_perda_reais") or 0.0), 2) for r in rows}
+
+        return {
+            "total_eventos": total_eventos,
+            "total_energia_restringida_mwh": round(total_energia, 4),
+            "total_perda_reais": round(total_perda, 2),
+            "por_razao": por_razao,
+            "pld_faltante_eventos": pld_faltante,
+        }

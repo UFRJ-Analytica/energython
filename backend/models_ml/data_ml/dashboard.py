@@ -23,8 +23,7 @@ from app.ml.features import build_training_frame
 
 # Carregar variáveis de ambiente (DATABASE_URL)
 load_dotenv(BACKEND_DIR / ".env")
-# Substituindo temporariamente para usar o banco de teste solicitado pelo usuário
-DATABASE_URL = "postgresql://analytica:Data%26Dorme@177.7.55.100:32775/hacka-energinn"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 st.set_page_config(page_title="CurtailIQ - Analytics", layout="wide", page_icon="⚡")

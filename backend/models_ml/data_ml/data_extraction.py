@@ -61,9 +61,9 @@ try:
                CAST(val_geracao AS text) AS val_geracao, CAST(val_disponibilidade AS text) AS val_disponibilidade,
                CAST(val_geracaoreferenciafinal AS text) AS val_geracaoreferenciafinal, cod_razaorestricao AS razao_restricao
         FROM public.restricao_coff_eolica_usi
-        WHERE id_ons IN %(usinas)s AND din_instante IS NOT NULL
+        WHERE id_ons IS NOT NULL AND din_instante IS NOT NULL
     """
-    df_eolica = pd.read_sql(query_eolica, engine, params={"usinas": usinas_list})
+    df_eolica = pd.read_sql(query_eolica, engine)
     process_and_save(df_eolica, "flat_dados_eolica.csv")
 
     print("Extraindo Solar...")
@@ -72,13 +72,17 @@ try:
                CAST(val_geracao AS text) AS val_geracao, CAST(val_disponibilidade AS text) AS val_disponibilidade,
                CAST(val_geracaoreferenciafinal AS text) AS val_geracaoreferenciafinal, cod_razaorestricao AS razao_restricao
         FROM public.restricao_coff_fotovoltaica
-        WHERE id_ons IN %(usinas)s AND din_instante IS NOT NULL
+        WHERE id_ons IS NOT NULL AND din_instante IS NOT NULL
     """
-    df_solar = pd.read_sql(query_solar, engine, params={"usinas": usinas_list})
+    df_solar = pd.read_sql(query_solar, engine)
     process_and_save(df_solar, "flat_dados_solar.csv")
 
     print("Extraindo CCEE...")
-    query_ccee = "SELECT * FROM public.ccee_pld_horario_submercado LIMIT 1000"
+    query_ccee = """
+        SELECT *
+        FROM public.ccee_pld_horario_submercado
+        WHERE mes_referencia >= to_char(current_date - interval '180 day', 'YYYYMM')
+    """
     df_ccee = pd.read_sql(query_ccee, engine)
     df_ccee.to_csv(OUTPUT_DIR / "ccee_cache.csv", index=False)
     print("Salvo CCEE cache")

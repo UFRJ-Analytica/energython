@@ -38,7 +38,19 @@ def _demo_cache_dir() -> Path:
 
 
 def _demo_cache_enabled() -> bool:
-    return os.getenv("CURTAILMENT_DEMO_LOCAL_CACHE_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+    mode = os.getenv("CURTAILMENT_DEMO_LOCAL_CACHE_ENABLED", "auto").strip().lower()
+    if mode in {"1", "true", "yes", "on"}:
+        return True
+    if mode in {"0", "false", "no", "off"}:
+        return False
+    base = _demo_cache_dir()
+    required = [
+        base / "usinas_cache.csv",
+        base / "flat_dados_eolica.csv",
+        base / "flat_dados_solar.csv",
+        base / "ccee_cache.csv",
+    ]
+    return all(p.exists() and p.stat().st_size > 0 for p in required)
 
 
 @lru_cache(maxsize=1)

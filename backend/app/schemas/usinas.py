@@ -33,6 +33,8 @@ class UsinaResumoOut(BaseModel):
     total_corte_mwh: float
     total_perda_reais: float
     percentual_ressarcivel: float
+    perda_ressarcivel_reais: float
+    perda_por_razao: dict[str, float]
     total_eventos_corte: int
     ticket_medio_evento_reais: float
     metadata: MetaOut

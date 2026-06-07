@@ -27,6 +27,8 @@ export interface UsinaResumoOut {
   total_corte_mwh: number
   total_perda_reais: number
   percentual_ressarcivel: number
+  perda_ressarcivel_reais: number
+  perda_por_razao: Record<string, number>
   total_eventos_corte: number
   ticket_medio_evento_reais: number
   perda_esperada_30d: {

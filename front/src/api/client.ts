@@ -25,3 +25,4 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const get = <T>(path: string) => request<T>(path)
 export const post = <T>(path: string, body: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(body) })
+export const patch = <T>(path: string, body: unknown) => request<T>(path, { method: "PATCH", body: JSON.stringify(body) })

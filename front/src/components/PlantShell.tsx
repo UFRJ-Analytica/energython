@@ -10,8 +10,8 @@ const tabs = [
   { to: "", label: "Resumo", end: true },
   { to: "financeiro", label: "Financeiro", end: false },
   { to: "bess", label: "Simulador BESS", end: false },
-  { to: "dossie", label: "Dossiê", end: false },
-  { to: "chat", label: "Chat Regulatório", end: false },
+  { to: "dossie", label: "Ressarcimento", end: false },
+  { to: "chat", label: "Curtail AI", end: false },
 ]
 
 export function PlantShell() {

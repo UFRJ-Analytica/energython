@@ -249,6 +249,8 @@ class PostgresRepository(BaseRepository):
             geracao_referencia_mwh,
             energia_restringida_mwh,
             razao_restricao,
+            NULL::text AS cod_razaorestricao,
+            NULL::text AS origem_restricao,
             submercado
         FROM gold.constrained_off
         WHERE usina_id = :usina_id
@@ -275,14 +277,18 @@ class PostgresRepository(BaseRepository):
                         ELSE to_timestamp(din_instante, 'YYYY-MM-DD HH24:MI:SS')
                     END AS timestamp,
                     nom_usina AS fonte,
-                    NULLIF(val_geracao, '')::double precision AS geracao_verificada_mwh,
-                    COALESCE(NULLIF(val_geracaoreferenciafinal, '')::double precision, NULLIF(val_geracaoreferencia, '')::double precision, 0) AS geracao_referencia_mwh,
-                    GREATEST(
-                        COALESCE(NULLIF(val_geracaoreferenciafinal, '')::double precision, NULLIF(val_geracaoreferencia, '')::double precision, 0)
-                        - COALESCE(NULLIF(val_geracao, '')::double precision, 0),
-                        0
+                    NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision AS geracao_verificada_mwh,
+                    COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0) AS geracao_referencia_mwh,
+                    COALESCE(
+                        NULLIF(REPLACE(val_geracaolimitada::text, ',', '.'), '')::double precision,
+                        GREATEST(
+                            COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0)
+                            - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
+                            0
+                        )
                     ) AS energia_restringida_mwh,
                     cod_razaorestricao AS cod_razaorestricao,
+                    cod_origemrestricao AS origem_restricao,
                     NULL::text AS razao_restricao,
                     CASE
                         WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('NE', 'NORDESTE') THEN 'NE'
@@ -298,14 +304,18 @@ class PostgresRepository(BaseRepository):
                     id_ons AS usina_id,
                     din_instante::timestamp AS timestamp,
                     nom_usina AS fonte,
-                    COALESCE(val_geracao, 0)::double precision AS geracao_verificada_mwh,
-                    COALESCE(val_geracaoreferenciafinal, val_geracaoreferencia, 0)::double precision AS geracao_referencia_mwh,
-                    GREATEST(
-                        COALESCE(val_geracaoreferenciafinal, val_geracaoreferencia, 0)::double precision
-                        - COALESCE(val_geracao, 0)::double precision,
-                        0
+                    COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0) AS geracao_verificada_mwh,
+                    COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0) AS geracao_referencia_mwh,
+                    COALESCE(
+                        NULLIF(REPLACE(val_geracaolimitada::text, ',', '.'), '')::double precision,
+                        GREATEST(
+                            COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0)
+                            - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
+                            0
+                        )
                     ) AS energia_restringida_mwh,
                     cod_razaorestricao AS cod_razaorestricao,
+                    cod_origemrestricao AS origem_restricao,
                     NULL::text AS razao_restricao,
                     CASE
                         WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('NE', 'NORDESTE') THEN 'NE'
@@ -316,9 +326,10 @@ class PostgresRepository(BaseRepository):
                 WHERE id_ons = :usina_id
             )
             SELECT usina_id, timestamp, fonte, geracao_verificada_mwh, geracao_referencia_mwh,
-                   energia_restringida_mwh, razao_restricao, cod_razaorestricao, submercado
+                   energia_restringida_mwh, razao_restricao, cod_razaorestricao, origem_restricao, submercado
             FROM base
             WHERE timestamp BETWEEN :inicio AND :fim
+              AND cod_razaorestricao IS NOT NULL
               AND energia_restringida_mwh > 0
               AND (:ne_only = false OR submercado = 'NE')
             ORDER BY timestamp
@@ -660,3 +671,39 @@ class PostgresRepository(BaseRepository):
             "por_razao": por_razao,
             "pld_faltante_eventos": pld_faltante,
         }
+
+    def obter_franquia(self, ano: int, fonte: str | None):
+        fonte_norm = (fonte or "").lower()
+        if "eol" in fonte_norm:
+            fonte_norm = "eolica"
+        elif "solar" in fonte_norm or "fotov" in fonte_norm:
+            fonte_norm = "solar"
+        sql = """
+        SELECT ano, fonte, franquia_horas, fonte_normativa, observacao
+        FROM gold.franquia_anual
+        WHERE ano = :ano AND fonte = :fonte
+        LIMIT 1
+        """
+        rows = self._safe_mappings_query(sql, {"ano": int(ano), "fonte": fonte_norm})
+        return rows[0] if rows else None
+
+    def obter_contratos_vigentes(self, usina_id: str, data):
+        sql = """
+        SELECT usina_id, tipo_contrato, volume_mwm, preco_reais_mwh, vigencia_inicio, vigencia_fim
+        FROM gold.contratos_usina
+        WHERE usina_id = :usina_id
+          AND vigencia_inicio <= :data
+          AND (vigencia_fim IS NULL OR vigencia_fim >= :data)
+        ORDER BY vigencia_inicio DESC
+        """
+        return self._safe_mappings_query(sql, {"usina_id": usina_id, "data": data})
+
+    def get_dados_proprios_climatologia(self, usina_id: str, inicio: datetime, fim: datetime):
+        sql = """
+        SELECT usina_id, timestamp, vento_ms_proprio, irradiancia_wm2_proprio,
+               disponibilidade_eletromecanica, fonte_dado
+        FROM gold.dados_proprios_climatologia
+        WHERE usina_id = :usina_id AND timestamp BETWEEN :inicio AND :fim
+        ORDER BY timestamp
+        """
+        return self._safe_mappings_query(sql, {"usina_id": usina_id, "inicio": inicio, "fim": fim})

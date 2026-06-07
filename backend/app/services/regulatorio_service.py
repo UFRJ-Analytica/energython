@@ -253,8 +253,39 @@ class RegulatorioService:
             if cached is not None:
                 return cached
 
+        usina = self.repo.get_usina(usina_id)
+        if not usina:
+            raise ValueError("usina_nao_encontrada")
+
         eleg = self.classificar_eventos(usina_id, inicio, fim, usar_ia_classificacao=True)
-        dossie = self.dossier_agent.gerar_dossie(eleg)
+        perda_resumo = self.financeiro_service.calcular_perda_resumida(usina_id, inicio, fim)
+        exposicao_30d = self.financeiro_service.projetar_exposicao(usina_id, horizonte_horas=24 * 30)
+
+        payload_dossie = {
+            "usina": {
+                "usina_id": usina.get("usina_id"),
+                "nome": usina.get("nome"),
+                "fonte": usina.get("fonte"),
+                "submercado": usina.get("submercado"),
+            },
+            "periodo": {"inicio": inicio.isoformat(), "fim": fim.isoformat()},
+            "resumo_financeiro": {
+                "total_perda_reais": perda_resumo.get("total_perda_reais"),
+                "total_energia_restringida_mwh": perda_resumo.get("total_energia_restringida_mwh"),
+                "por_razao": perda_resumo.get("por_razao"),
+                "total_eventos": perda_resumo.get("total_eventos"),
+                "perda_esperada_30d_reais": round(float(exposicao_30d.get("exposicao_estimada_reais") or 0.0), 2),
+                "perda_esperada_30d_energia_mwh": round(float(exposicao_30d.get("energia_perdida_prevista_mwh") or 0.0), 4),
+                "horizonte_dias": 30,
+            },
+            "elegibilidade": eleg,
+            "instrucao_contextual": (
+                "Para MVP/pitch rápido, usar os números fornecidos no payload como fonte primária. "
+                "Não declarar 'informação indisponível' quando o campo numérico estiver presente."
+            ),
+        }
+
+        dossie = self.dossier_agent.gerar_dossie(payload_dossie)
         out = {"usina_id": usina_id, "dossie_markdown": dossie}
 
         if self.cache:
@@ -398,13 +429,17 @@ class RegulatorioService:
                 inicio_ctx = inicio or (fim_ctx.replace(tzinfo=None) - timedelta(days=30))
                 try:
                     perda = self.financeiro_service.calcular_perda(usina_id, inicio_ctx, fim_ctx)
+                    perda_resumo = self.financeiro_service.calcular_perda_resumida(usina_id, inicio_ctx, fim_ctx)
+                    exposicao_30d = self.financeiro_service.projetar_exposicao(usina_id, horizonte_horas=24 * 30)
                     eleg = self.classificar_eventos(usina_id, inicio_ctx, fim_ctx, usar_ia_classificacao=False)
                     contexto_operacional = (
                         f"Usina: {usina.get('usina_id')} - {usina.get('nome')} | fonte={usina.get('fonte')} | submercado={usina.get('submercado')}\n"
                         f"Período histórico analisado: {inicio_ctx.isoformat()} até {fim_ctx.isoformat()}\n"
                         f"Histórico: corte_total_mwh={perda.get('total_energia_restringida_mwh')} | perda_total_reais={perda.get('total_perda_reais')} | eventos={len(perda.get('serie', []))}\n"
+                        f"Histórico resumido: total_perda_reais={perda_resumo.get('total_perda_reais')} | total_energia_mwh={perda_resumo.get('total_energia_restringida_mwh')} | por_razao={perda_resumo.get('por_razao')}\n"
+                        f"Previsão 30d: perda_esperada_reais={round(float(exposicao_30d.get('exposicao_estimada_reais') or 0.0), 2)} | energia_prevista_mwh={round(float(exposicao_30d.get('energia_perdida_prevista_mwh') or 0.0), 4)}\n"
                         f"Regulatório: potencial_ressarcivel_reais={eleg.get('total_potencial_ressarcivel_reais')} | pos_franquia_reais={eleg.get('total_ressarcivel_pos_franquia_reais')}\n"
-                        "Observação: os números acima são históricos; projeções devem ser explicitamente marcadas como previsão."
+                        "Observação: use os números acima e diferencie histórico vs previsão no texto final; não alegar ausência de dados quando os campos estiverem presentes."
                     )
                 except Exception:
                     contexto_operacional = (

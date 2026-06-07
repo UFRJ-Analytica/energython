@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useParams } from "react-router-dom"
 import { SendHorizontal, BookOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -14,13 +15,14 @@ const SUGESTOES = [
 ]
 
 export default function Chat() {
+  const { id } = useParams<{ id: string }>()
   const [pergunta, setPergunta] = useState("")
   const { mutate, data, isPending, error } = useConsulta()
 
   const enviar = (q: string) => {
     if (!q.trim()) return
     setPergunta(q)
-    mutate({ pergunta: q.trim() })
+    mutate({ pergunta: q.trim(), usina_id: id })
   }
 
   return (

@@ -13,5 +13,7 @@ export const RAZAO_LABELS: Record<string, string> = {
   confiabilidade: "Confiabilidade",
   indisponibilidade_externa: "Indisp. externa",
   energetico: "Energético",
+  restricao_eletrica: "Restrição elétrica",
+  seguranca_eletroenergetica: "Segurança eletroenergética",
   indefinido: "Indefinido",
 }

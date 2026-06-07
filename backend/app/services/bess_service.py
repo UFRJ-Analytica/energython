@@ -47,10 +47,11 @@ class BessService:
         if capex and receita > 0:
             payback = capex / receita
 
+        horizonte_previsao_horas = 24 * 30
         previsao_futura = forecast_future_losses(
             repo=self.repo,
             usina=usina,
-            horizon_hours=max(24, int(duracao_horas * 24)),
+            horizon_hours=horizonte_previsao_horas,
         )
         energia_prevista = float(previsao_futura["energia_total_prevista_mwh"])
         pld_medio_previsto = 0.0
@@ -71,6 +72,7 @@ class BessService:
             "payback_anos": round(payback, 2) if payback is not None else None,
             "dimensionamento_com_previsao": {
                 "tipo_dado": "previsao",
+                "horizonte_dias": 30,
                 "metodo_previsao": previsao_futura["metodo_previsao"],
                 "energia_perdida_prevista_mwh": round(energia_prevista, 4),
                 "energia_recuperavel_prevista_mwh": round(energia_recuperavel_futura, 4),

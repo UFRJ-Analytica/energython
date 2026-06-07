@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import engine
 from app.routers.financeiro import router as financeiro_router
+from app.routers.pleito import router as pleito_router
 from app.routers.regulatorio import router as regulatorio_router
 from app.routers.usinas import router as usinas_router
 from app.utils.logging_utils import configure_logging, request_logger_middleware
@@ -25,6 +26,7 @@ app.add_middleware(
 app.include_router(usinas_router)
 app.include_router(financeiro_router)
 app.include_router(regulatorio_router)
+app.include_router(pleito_router)
 
 
 @app.get("/health")

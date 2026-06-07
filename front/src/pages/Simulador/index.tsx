@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { DateRangePicker } from "@/components/shared/DateRangePicker"
 import { ErrorState } from "@/components/shared/ErrorState"
 import { useBessSimular } from "@/hooks/useFinanceiro"
+import { useUsinaResumo } from "@/hooks/useUsinas"
 import { fmtBRL, fmtMWh, fmtPct, toIso } from "@/lib/formatters"
 import type { BessOut } from "@/types/financeiro"
 
@@ -18,24 +19,43 @@ const PRESETS = [
 ]
 
 function ResultCard({ result, label, highlight }: { result: BessOut; label: string; highlight?: boolean }) {
+  const receitaHistorica = Number(result.receita_recuperada_reais || 0)
+  const perdaEvitavelFutura = Number(result.dimensionamento_com_previsao?.perda_financeira_evitavel_prevista_reais || 0)
+
   return (
     <div className={`rounded-xl border p-5 space-y-3 ${highlight ? "border-emerald-500/40 bg-emerald-500/5" : "border-border/50 bg-muted/20"}`}>
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
+      {perdaEvitavelFutura > 0 && (
+        <div className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 p-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-emerald-300">Potencial financeiro projetado (frente)</p>
+          <p className="mt-1 text-3xl font-bold text-emerald-300">{fmtBRL(perdaEvitavelFutura)}</p>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">Receita recuperada no período histórico selecionado</p>
       <div className={`text-3xl font-bold ${highlight ? "text-emerald-400" : "text-foreground"}`}>
-        {fmtBRL(result.receita_recuperada_reais)}
+        {fmtBRL(receitaHistorica)}
       </div>
       <div className="space-y-1 text-sm text-muted-foreground">
-        <p>{fmtMWh(result.energia_recuperada_mwh)} recuperados</p>
-        <p>{fmtPct(result.percentual_mitigado)} do corte mitigado</p>
-        {result.dimensionamento_com_previsao && (
+        {receitaHistorica <= 0 && perdaEvitavelFutura > 0 && (
           <p>
-            Perda energética futura (ML): <span className="text-foreground font-medium">{fmtMWh(result.dimensionamento_com_previsao.energia_perdida_prevista_mwh)}</span>
+            No período histórico atual, o valor recuperado ficou em <span className="text-foreground font-medium">R$ 0,00</span>. O potencial financeiro projetado para frente está em <span className="text-foreground font-medium">{fmtBRL(perdaEvitavelFutura)}</span>.
           </p>
         )}
-        {result.dimensionamento_com_previsao && (
-          <p>
-            Perda evitável futura: <span className="text-foreground font-medium">{fmtBRL(result.dimensionamento_com_previsao.perda_financeira_evitavel_prevista_reais)}</span>
-          </p>
+
+        <p>{fmtMWh(result.energia_recuperada_mwh)} recuperados</p>
+        <p>{fmtPct(result.percentual_mitigado)} do corte mitigado</p>
+        {result.dimensionamento_com_previsao ? (
+          <>
+            <p>
+              Forecast perda energética (próximos {result.dimensionamento_com_previsao.horizonte_dias ?? 30} dias): <span className="text-foreground font-medium">{fmtMWh(result.dimensionamento_com_previsao.energia_perdida_prevista_mwh)}</span>
+            </p>
+            <p>
+              Perda evitável futura: <span className="text-foreground font-medium">{fmtBRL(result.dimensionamento_com_previsao.perda_financeira_evitavel_prevista_reais)}</span>
+            </p>
+          </>
+        ) : (
+          <p>Forecast de perda energética indisponível para este cenário.</p>
         )}
         {result.payback_anos != null && <p>Payback estimado: <span className="text-foreground font-medium">{result.payback_anos.toFixed(1)} anos</span></p>}
       </div>
@@ -54,11 +74,13 @@ export default function Simulador() {
   const [presetResults, setPresetResults] = useState<(BessOut | null)[]>([null, null])
 
   const main = useBessSimular(id!, inicio, fim)
+  const resumo = useUsinaResumo(id!, inicio, fim)
   const preset0 = useBessSimular(id!, inicio, fim)
   const preset1 = useBessSimular(id!, inicio, fim)
   const lastPresetKeyRef = useRef<string>("")
 
   const runMain = useCallback(() => {
+
     main.mutate({ potencia_mw: potencia, duracao_horas: duracao, eficiencia: eficiencia / 100, capex: capex > 0 ? capex : undefined })
   }, [main, potencia, duracao, eficiencia, capex])
 
@@ -140,6 +162,16 @@ export default function Simulador() {
             />
           </div>
 
+          <div className="rounded-md border border-border/40 bg-muted/20 p-3 text-sm space-y-1">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Estimativa base antes da simulação</p>
+            <p>
+              Energia com perda esperada (janela selecionada): <span className="font-medium text-foreground">{resumo.data ? fmtMWh(resumo.data.total_corte_mwh) : "—"}</span>
+            </p>
+            <p>
+              Perda financeira esperada (próximos 30 dias): <span className="font-medium text-foreground">{resumo.data ? fmtBRL(resumo.data.perda_esperada_30d.valor_reais) : "—"}</span>
+            </p>
+          </div>
+
           <button
             type="button"
             className="inline-flex h-9 items-center justify-center rounded-md bg-emerald-600 px-3 text-sm font-medium text-white hover:bg-emerald-500"
@@ -174,7 +206,6 @@ export default function Simulador() {
             </div>
           )}
         </div>
-      </div>
 
       {/* Comparação de cenários */}
       <div className="mt-8">
@@ -203,5 +234,6 @@ export default function Simulador() {
         </div>
       </div>
     </div>
+  </div>
   )
 }

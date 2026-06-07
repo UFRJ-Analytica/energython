@@ -109,6 +109,8 @@ def resumo_usina(
         "total_corte_mwh": perda["total_energia_restringida_mwh"],
         "total_perda_reais": total_perda,
         "percentual_ressarcivel": round(perc_ress, 2),
+        "perda_ressarcivel_reais": round(perda_ressarcivel, 2),
+        "perda_por_razao": {str(k): round(float(v or 0.0), 2) for k, v in (perda.get("por_razao") or {}).items()},
         "total_eventos_corte": total_eventos,
         "ticket_medio_evento_reais": round(ticket_medio, 2),
         "metadata": {

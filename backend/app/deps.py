@@ -13,6 +13,7 @@ from app.repositories.base import BaseRepository
 from app.repositories.mock_repo import MockRepository
 from app.services.bess_service import BessService
 from app.services.financeiro_service import FinanceiroService
+from app.services.pleito_service import PleitoService
 from app.services.regulatorio_service import RegulatorioService
 from app.utils.simple_cache import TTLCache
 
@@ -30,6 +31,14 @@ def get_repo(settings: Settings = Depends(get_settings), db=Depends(get_db_sessi
 
 def get_financeiro_service(repo: BaseRepository = Depends(get_repo)) -> FinanceiroService:
     return FinanceiroService(repo, cache=financeiro_cache)
+
+
+def get_pleito_service(
+    repo: BaseRepository = Depends(get_repo), settings: Settings = Depends(get_settings)
+) -> PleitoService:
+    llm = AnthropicClient(api_key=settings.anthropic_api_key)
+    dossier = DossierAgent(llm, model=settings.anthropic_model_smart)
+    return PleitoService(repo=repo, dossier_agent=dossier)
 
 
 def get_bess_service(repo: BaseRepository = Depends(get_repo)) -> BessService:

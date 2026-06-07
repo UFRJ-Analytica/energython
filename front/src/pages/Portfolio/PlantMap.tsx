@@ -1,8 +1,10 @@
 import "leaflet/dist/leaflet.css"
 
 import { useMemo } from "react"
+import { useNavigate } from "react-router-dom"
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import type { UsinaOut } from "@/types/usinas"
 
 interface Props {
@@ -10,6 +12,7 @@ interface Props {
 }
 
 export function PlantMap({ usinas }: Props) {
+  const navigate = useNavigate()
   const points = useMemo(
     () =>
       usinas.filter(
@@ -70,6 +73,13 @@ export function PlantMap({ usinas }: Props) {
                       <div>
                         Lat/Lon: {u.latitude.toFixed(4)}, {u.longitude.toFixed(4)}
                       </div>
+                      <Button
+                        size="sm"
+                        className="mt-2 h-7 w-full text-xs"
+                        onClick={() => navigate(`/usinas/${u.usina_id}`)}
+                      >
+                        Selecionar usina e ir para análise
+                      </Button>
                     </div>
                   </Popup>
                 </CircleMarker>

@@ -58,14 +58,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Copia docker-compose para VPS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: docker-compose.yml
-          target: /opt/energython
+      - name: Encode docker-compose
+        run: echo "COMPOSE_B64=$(base64 -w 0 docker-compose.yml)" >> $GITHUB_ENV
 
       - name: Deploy
         uses: appleboy/ssh-action@v1
@@ -73,9 +67,9 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: DATABASE_URL,ANTHROPIC_API_KEY,CORS_ORIGINS,MVP_ONLY_NORDESTE,GHCR_TOKEN,GHCR_USER
+          envs: DATABASE_URL,ANTHROPIC_API_KEY,CORS_ORIGINS,MVP_ONLY_NORDESTE,GHCR_TOKEN,GHCR_USER,COMPOSE_B64
           script: |
-            mkdir -p /opt/energython/backend
+            mkdir -p ~/energython/backend
 
             printf '%s\n' \
               "DATABASE_URL=$DATABASE_URL" \
@@ -83,10 +77,12 @@ jobs:
               "CORS_ORIGINS=$CORS_ORIGINS" \
               "MVP_ONLY_NORDESTE=$MVP_ONLY_NORDESTE" \
               "DATA_BACKEND=postgres" \
-              > /opt/energython/backend/.env
+              > ~/energython/backend/.env
+
+            echo "$COMPOSE_B64" | base64 -d > ~/energython/docker-compose.yml
 
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            cd /opt/energython
+            cd ~/energython
             docker compose pull
             docker compose up -d --remove-orphans
             docker image prune -f
@@ -97,3 +93,4 @@ jobs:
           MVP_ONLY_NORDESTE: ${{ secrets.MVP_ONLY_NORDESTE }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}
+          COMPOSE_B64: ${{ env.COMPOSE_B64 }}

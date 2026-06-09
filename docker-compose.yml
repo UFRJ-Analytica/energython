@@ -11,12 +11,22 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.energython-api.entrypoints=websecure"
+      - "traefik.http.routers.energython-api.rule=Host(`energython-api.cognati.tech`)"
+      - "traefik.http.routers.energython-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.energython-api.loadbalancer.server.port=8000"
 
   frontend:
     image: ghcr.io/ufrj-analytica/energython-frontend:latest
     restart: unless-stopped
-    ports:
-      - "80:80"
     depends_on:
       backend:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.energython.entrypoints=websecure"
+      - "traefik.http.routers.energython.rule=Host(`energython.cognati.tech`)"
+      - "traefik.http.routers.energython.tls.certresolver=letsencrypt"
+      - "traefik.http.services.energython.loadbalancer.server.port=80"

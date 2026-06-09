@@ -48,7 +48,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/build-info")
+@app.get("/api/build-info")
 def build_info():
     return {
         "git_hash": _BACK_GIT_HASH,

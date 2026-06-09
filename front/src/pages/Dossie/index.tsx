@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from "react"
 import { useParams } from "react-router-dom"
-import { subDays } from "date-fns"
 import { Check, Copy, Download, FileText } from "lucide-react"
 import Markdown from "react-markdown"
 import { Badge } from "@/components/ui/badge"
@@ -14,8 +13,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DateRangePicker } from "@/components/shared/DateRangePicker"
 import { ErrorState } from "@/components/shared/ErrorState"
 import { KpiCard } from "@/components/shared/KpiCard"
+import { usePlantDateRange } from "@/hooks/usePlantDateRange"
+import { useUsina } from "@/hooks/useUsinas"
 import { useCriarPleito, useEventosPleito, useExportarPleito, useFranquiaStatus } from "@/hooks/useRegulatorio"
-import { fmtBRL, fmtDate, fmtMWh, fmtNum, toIso } from "@/lib/formatters"
+import { fmtBRL, fmtDate, fmtMWh, fmtNum } from "@/lib/formatters"
 import type { EventoPleito } from "@/types/regulatorio"
 
 const canalLabel: Record<string, string> = {
@@ -51,8 +52,8 @@ function triggerDownload(fileName: string, content: string, contentType: string,
 
 export default function Dossie() {
   const { id } = useParams<{ id: string }>()
-  const [inicio, setInicio] = useState(() => toIso(subDays(new Date(), 30)))
-  const [fim, setFim] = useState(() => toIso(new Date()))
+  const usina = useUsina(id!)
+  const dateRange = usePlantDateRange(usina.data?.fonte)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [motivoFilter, setMotivoFilter] = useState<"todos" | "REL" | "CNF" | "ENE">("todos")
   const [onlyEligible, setOnlyEligible] = useState(true)
@@ -62,8 +63,8 @@ export default function Dossie() {
   const [copied, setCopied] = useState(false)
   const pleitoRef = useRef<HTMLDivElement | null>(null)
 
-  const { data, isLoading, error } = useEventosPleito(id!, inicio, fim)
-  const ano = useMemo(() => new Date(inicio).getFullYear(), [inicio])
+  const { data, isLoading, error } = useEventosPleito(id!, dateRange.inicio, dateRange.fim, dateRange.ready)
+  const ano = useMemo(() => dateRange.inicio ? new Date(dateRange.inicio).getFullYear() : new Date().getFullYear(), [dateRange.inicio])
   const franquiaStatus = useFranquiaStatus(id!, ano)
   const criarPleito = useCriarPleito(id!)
   const exportarPleito = useExportarPleito()
@@ -102,7 +103,7 @@ export default function Dossie() {
 
   const gerarPleito = (eventosIds = selectedIds, canal = selectedCanal) => {
     criarPleito.mutate(
-      { eventos_ids: eventosIds, canal, inicio, fim },
+      { eventos_ids: eventosIds, canal, inicio: dateRange.inicio, fim: dateRange.fim },
       {
         onSuccess: (res) => {
           setDraft(res.markdown_gerado)
@@ -138,7 +139,13 @@ export default function Dossie() {
       </div>
 
       <div className="mb-6 flex flex-wrap items-center gap-4">
-        <DateRangePicker onChange={(i, f) => { setInicio(i); setFim(f); setSelectedIds([]); setDraft("") }} />
+        <DateRangePicker
+          initialFrom={dateRange.inicio ? new Date(dateRange.inicio) : undefined}
+          initialTo={dateRange.fim ? new Date(dateRange.fim) : undefined}
+          minDate={dateRange.minDate}
+          maxDate={dateRange.maxDate}
+          onChange={(i, f) => { dateRange.setRange(i, f); setSelectedIds([]); setDraft("") }}
+        />
         {franquiaStatus.data && (
           <Badge variant="secondary">
             Franquia {franquiaStatus.data.ano}: {fmtNum(franquiaStatus.data.franquia_horas)} h · restante {fmtNum(franquiaStatus.data.horas_restantes)} h

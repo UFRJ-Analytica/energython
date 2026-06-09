@@ -4,6 +4,7 @@ import csv
 from datetime import datetime
 from pathlib import Path
 
+from app.domain.top_plants import filter_top_50_usinas, is_top_50_usina
 from app.repositories.base import BaseRepository
 
 
@@ -23,6 +24,12 @@ class MockRepository(BaseRepository):
             usinas_ne = {u.get("usina_id") for u in self.usinas}
             self.geracao = [g for g in self.geracao if g.get("usina_id") in usinas_ne]
             self.clima = [c for c in self.clima if c.get("usina_id") in usinas_ne]
+
+        self.usinas = filter_top_50_usinas(self.usinas)
+        top_ids = {u.get("usina_id") for u in self.usinas}
+        self.co = [e for e in self.co if e.get("usina_id") in top_ids]
+        self.geracao = [g for g in self.geracao if g.get("usina_id") in top_ids]
+        self.clima = [c for c in self.clima if c.get("usina_id") in top_ids]
 
     def _load_csv(self, path: Path, datetime_cols: set[str] | None = None):
         datetime_cols = datetime_cols or set()
@@ -62,6 +69,8 @@ class MockRepository(BaseRepository):
         return data
 
     def get_usina(self, usina_id: str):
+        if not is_top_50_usina(usina_id):
+            return None
         for u in self.usinas:
             if u.get("usina_id") == usina_id:
                 return u

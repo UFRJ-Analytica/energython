@@ -1,13 +1,13 @@
-import { useState } from "react"
 import { useParams } from "react-router-dom"
-import { subDays } from "date-fns"
 import { format } from "date-fns"
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DateRangePicker } from "@/components/shared/DateRangePicker"
 import { ErrorState } from "@/components/shared/ErrorState"
 import { usePerda } from "@/hooks/useFinanceiro"
-import { fmtBRL, fmtMWh, toIso } from "@/lib/formatters"
+import { usePlantDateRange } from "@/hooks/usePlantDateRange"
+import { useUsina } from "@/hooks/useUsinas"
+import { fmtBRL, fmtMWh } from "@/lib/formatters"
 import { RAZAO_LABELS } from "@/lib/constants"
 
 const RAZAO_COLORS: Record<string, string> = {
@@ -19,9 +19,9 @@ const RAZAO_COLORS: Record<string, string> = {
 
 export default function Financeiro() {
   const { id } = useParams<{ id: string }>()
-  const [inicio, setInicio] = useState(() => toIso(subDays(new Date(), 30)))
-  const [fim, setFim] = useState(() => toIso(new Date()))
-  const { data, isLoading, error } = usePerda(id!, inicio, fim)
+  const usina = useUsina(id!)
+  const dateRange = usePlantDateRange(usina.data?.fonte)
+  const { data, isLoading, error } = usePerda(id!, dateRange.inicio, dateRange.fim, dateRange.ready)
 
   const serie = data?.serie.map((s) => ({
     ...s,
@@ -41,7 +41,13 @@ export default function Financeiro() {
           <p className="text-xs font-medium uppercase tracking-widest text-teal-500">Análise Financeira</p>
           <h2 className="mt-0.5 text-xl font-bold">De onde vem a perda?</h2>
         </div>
-        <DateRangePicker onChange={(i, f) => { setInicio(i); setFim(f) }} />
+        <DateRangePicker
+          initialFrom={dateRange.inicio ? new Date(dateRange.inicio) : undefined}
+          initialTo={dateRange.fim ? new Date(dateRange.fim) : undefined}
+          minDate={dateRange.minDate}
+          maxDate={dateRange.maxDate}
+          onChange={dateRange.setRange}
+        />
       </div>
 
       {error && <ErrorState error={error} />}

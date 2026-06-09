@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useParams } from "react-router-dom"
-import { subDays } from "date-fns"
 import { Zap } from "lucide-react"
 import { Slider } from "@/components/ui/slider"
 import { Label } from "@/components/ui/label"
@@ -9,8 +8,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { DateRangePicker } from "@/components/shared/DateRangePicker"
 import { ErrorState } from "@/components/shared/ErrorState"
 import { useBessSimular } from "@/hooks/useFinanceiro"
-import { useUsinaResumo } from "@/hooks/useUsinas"
-import { fmtBRL, fmtMWh, fmtPct, toIso } from "@/lib/formatters"
+import { usePlantDateRange } from "@/hooks/usePlantDateRange"
+import { useUsina, useUsinaResumo } from "@/hooks/useUsinas"
+import { fmtBRL, fmtMWh, fmtPct } from "@/lib/formatters"
 import type { BessOut } from "@/types/financeiro"
 
 const PRESETS = [
@@ -65,18 +65,18 @@ function ResultCard({ result, label, highlight }: { result: BessOut; label: stri
 
 export default function Simulador() {
   const { id } = useParams<{ id: string }>()
-  const [inicio, setInicio] = useState(() => toIso(subDays(new Date(), 30)))
-  const [fim, setFim] = useState(() => toIso(new Date()))
+  const usina = useUsina(id!)
+  const dateRange = usePlantDateRange(usina.data?.fonte)
   const [potencia, setPotencia] = useState(30)
   const [duracao, setDuracao] = useState(4)
   const [eficiencia, setEficiencia] = useState(85)
   const [capex, setCapex] = useState(120_000_000)
   const [presetResults, setPresetResults] = useState<(BessOut | null)[]>([null, null])
 
-  const main = useBessSimular(id!, inicio, fim)
-  const resumo = useUsinaResumo(id!, inicio, fim)
-  const preset0 = useBessSimular(id!, inicio, fim)
-  const preset1 = useBessSimular(id!, inicio, fim)
+  const main = useBessSimular(id!, dateRange.inicio, dateRange.fim)
+  const resumo = useUsinaResumo(id!, dateRange.inicio, dateRange.fim, dateRange.ready)
+  const preset0 = useBessSimular(id!, dateRange.inicio, dateRange.fim)
+  const preset1 = useBessSimular(id!, dateRange.inicio, dateRange.fim)
   const lastPresetKeyRef = useRef<string>("")
 
   const runMain = useCallback(() => {
@@ -85,21 +85,21 @@ export default function Simulador() {
   }, [main, potencia, duracao, eficiencia, capex])
 
   const runPresetComparacao = useCallback(() => {
-    const k = `${inicio}|${fim}`
+    const k = `${dateRange.inicio}|${dateRange.fim}`
     if (lastPresetKeyRef.current === k) return
     lastPresetKeyRef.current = k
     preset0.mutate(PRESETS[0])
     preset1.mutate(PRESETS[1])
-  }, [inicio, fim, preset0, preset1])
+  }, [dateRange.inicio, dateRange.fim, preset0, preset1])
 
   useEffect(() => {
     // Não executa simulação principal automaticamente para evitar rajadas de requests.
     // Usuário dispara manualmente ao clicar em "Simular cenário".
-  }, [potencia, duracao, eficiencia, capex, inicio, fim])
+  }, [potencia, duracao, eficiencia, capex, dateRange.inicio, dateRange.fim])
 
   useEffect(() => {
     // Comparação de presets também é manual (botão) para não duplicar chamadas em dev/StrictMode.
-  }, [inicio, fim])
+  }, [dateRange.inicio, dateRange.fim])
 
   useEffect(() => {
     if (preset0.data) setPresetResults((p) => [preset0.data!, p[1]])
@@ -115,7 +115,13 @@ export default function Simulador() {
           <p className="text-xs font-medium uppercase tracking-widest text-teal-500">Simulador BESS</p>
           <h2 className="mt-0.5 text-xl font-bold">Quanto uma bateria recuperaria?</h2>
         </div>
-        <DateRangePicker onChange={(i, f) => { setInicio(i); setFim(f) }} />
+        <DateRangePicker
+          initialFrom={dateRange.inicio ? new Date(dateRange.inicio) : undefined}
+          initialTo={dateRange.fim ? new Date(dateRange.fim) : undefined}
+          minDate={dateRange.minDate}
+          maxDate={dateRange.maxDate}
+          onChange={dateRange.setRange}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">

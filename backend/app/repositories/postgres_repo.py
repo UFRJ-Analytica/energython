@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
+from app.domain.top_plants import filter_top_50_usinas, is_top_50_usina, list_top_50_usinas
 from app.repositories.base import BaseRepository
 
 
@@ -35,122 +36,20 @@ class PostgresRepository(BaseRepository):
             raise ValueError("usina_nao_encontrada")
 
     def list_usinas(self, fonte: str | None = None, submercado: str | None = None):
-        sql_gold = """
-        SELECT usina_id, nome, fonte, potencia_mw, submercado, latitude, longitude, garantia_fisica_mwm
-        FROM gold.usinas
-        WHERE (:fonte IS NULL OR fonte = :fonte)
-          AND (:submercado IS NULL OR submercado = :submercado)
-          AND (:ne_only = false OR submercado = 'NE')
-        ORDER BY nome
-        """
-        try:
-            rows = self.db.execute(
-                text(sql_gold),
-                {
-                    "fonte": fonte,
-                    "submercado": submercado,
-                    "ne_only": self.mvp_only_nordeste,
-                },
-            ).mappings().all()
-            return [dict(r) for r in rows]
-        except (ProgrammingError, OperationalError):
-            self.db.rollback()
-            sql_public_fc = """
-            WITH cutoff AS (
-                SELECT (MAX(din_instante) - INTERVAL '30 days') AS dt FROM public.fator_capacidade_2
-            ), ranked AS (
-                SELECT
-                    id_ons AS usina_id,
-                    nom_usina_conjunto AS nome,
-                    COALESCE(nom_tipousina, 'desconhecida') AS fonte,
-                    COALESCE(val_capacidadeinstalada, 0)::double precision AS potencia_mw,
-                    CASE
-                        WHEN UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') THEN 'NE'
-                        WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
-                        WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'
-                        ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
-                    END AS submercado,
-                    val_latitudesecoletora AS latitude,
-                    val_longitudesecoletora AS longitude,
-                    NULL::double precision AS garantia_fisica_mwm,
-                    ROW_NUMBER() OVER (PARTITION BY id_ons ORDER BY din_instante DESC NULLS LAST) AS rn
-                FROM public.fator_capacidade_2
-                WHERE id_ons IS NOT NULL
-                  AND din_instante >= (SELECT dt FROM cutoff)
-            )
-            SELECT usina_id, nome, fonte, potencia_mw, submercado, latitude, longitude, garantia_fisica_mwm
-            FROM ranked
-            WHERE rn = 1
-              AND (:ne_only = false OR submercado = 'NE')
-            ORDER BY nome
-            """
-            rows = self.db.execute(text(sql_public_fc), {"ne_only": self.mvp_only_nordeste}).mappings().all()
-            data = [dict(r) for r in rows]
-            if not data:
-                sql_public_disp = """
-                WITH cutoff AS (
-                    SELECT (MAX(din_instante) - INTERVAL '30 days') AS dt FROM public.disponibilidade_usina
-                ), ranked AS (
-                    SELECT
-                        id_ons AS usina_id,
-                        nom_usina AS nome,
-                        COALESCE(nom_tipocombustivel, 'desconhecida') AS fonte,
-                        COALESCE(val_potenciainstalada, 0)::double precision AS potencia_mw,
-                        CASE
-                            WHEN UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') THEN 'NE'
-                            WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
-                            WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'
-                            ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
-                        END AS submercado,
-                        NULL::double precision AS latitude,
-                        NULL::double precision AS longitude,
-                        NULL::double precision AS garantia_fisica_mwm,
-                        ROW_NUMBER() OVER (PARTITION BY id_ons ORDER BY din_instante DESC NULLS LAST) AS rn
-                    FROM public.disponibilidade_usina
-                    WHERE id_ons IS NOT NULL
-                      AND din_instante >= (SELECT dt FROM cutoff)
-                )
-                SELECT usina_id, nome, fonte, potencia_mw, submercado, latitude, longitude, garantia_fisica_mwm
-                FROM ranked
-                WHERE rn = 1
-                  AND (:ne_only = false OR submercado = 'NE')
-                ORDER BY nome
-                """
-                rows = self.db.execute(text(sql_public_disp), {"ne_only": self.mvp_only_nordeste}).mappings().all()
-                data = [dict(r) for r in rows]
-
-            # Enriquecer coordenadas via fator_capacidade_2 quando fallback veio sem lat/lon.
-            ids_sem_coord = [str(u.get("usina_id")) for u in data if u.get("latitude") is None or u.get("longitude") is None]
-            if ids_sem_coord:
-                try:
-                    sql_coords = """
-                    SELECT id_ons AS usina_id,
-                           MAX(val_latitudesecoletora)::double precision AS latitude,
-                           MAX(val_longitudesecoletora)::double precision AS longitude
-                    FROM public.fator_capacidade_2
-                    WHERE id_ons = ANY(:ids)
-                    GROUP BY id_ons
-                    """
-                    rows_coords = self.db.execute(text(sql_coords), {"ids": ids_sem_coord}).mappings().all()
-                    by_id = {str(r["usina_id"]): dict(r) for r in rows_coords}
-                    for u in data:
-                        uid = str(u.get("usina_id"))
-                        if uid in by_id:
-                            if u.get("latitude") is None:
-                                u["latitude"] = by_id[uid].get("latitude")
-                            if u.get("longitude") is None:
-                                u["longitude"] = by_id[uid].get("longitude")
-                except Exception:
-                    self.db.rollback()
-
-            if fonte:
-                f = fonte.lower()
-                data = [u for u in data if f in str(u.get("fonte", "")).lower()]
-            if submercado:
-                data = [u for u in data if str(u.get("submercado", "")).upper() == submercado.upper()]
-            return data
+        data = list_top_50_usinas()
+        if self.mvp_only_nordeste:
+            data = [u for u in data if str(u.get("submercado", "")).upper() == "NE"]
+        if fonte:
+            f = fonte.lower()
+            data = [u for u in data if f in str(u.get("fonte", "")).lower()]
+        if submercado:
+            data = [u for u in data if str(u.get("submercado", "")).upper() == submercado.upper()]
+        return filter_top_50_usinas(data)
 
     def get_usina(self, usina_id: str):
+        if not is_top_50_usina(usina_id):
+            return None
+
         sql_gold = """
         SELECT usina_id, nome, fonte, potencia_mw, submercado, latitude, longitude, garantia_fisica_mwm
         FROM gold.usinas

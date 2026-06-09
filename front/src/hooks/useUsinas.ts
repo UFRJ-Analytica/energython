@@ -40,9 +40,9 @@ export const useUsina = (id: string) =>
     enabled: !!id,
   })
 
-export const useUsinaResumo = (id: string, inicio: string, fim: string) =>
+export const useUsinaResumo = (id: string, inicio: string, fim: string, enabled = true) =>
   useQuery({
     queryKey: ["resumo", id, inicio, fim],
     queryFn: () => getResumo(id, inicio, fim),
-    enabled: !!id && !!inicio && !!fim,
+    enabled: enabled && !!id && !!inicio && !!fim,
   })

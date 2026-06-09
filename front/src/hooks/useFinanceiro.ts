@@ -2,11 +2,11 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import { getExposicao, getPerda, postBessSimular } from "@/api/financeiro"
 import type { BessRequest } from "@/types/financeiro"
 
-export const usePerda = (id: string, inicio: string, fim: string) =>
+export const usePerda = (id: string, inicio: string, fim: string, enabled = true) =>
   useQuery({
     queryKey: ["perda", id, inicio, fim],
     queryFn: () => getPerda(id, inicio, fim),
-    enabled: !!id && !!inicio && !!fim,
+    enabled: enabled && !!id && !!inicio && !!fim,
   })
 
 export const useExposicao = (id: string, horizonte = 48) =>

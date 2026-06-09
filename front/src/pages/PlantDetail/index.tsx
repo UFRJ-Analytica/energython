@@ -1,14 +1,12 @@
-import { useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { subDays } from "date-fns"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DateRangePicker } from "@/components/shared/DateRangePicker"
 import { ErrorState } from "@/components/shared/ErrorState"
+import { usePlantDateRange } from "@/hooks/usePlantDateRange"
 import { useUsina } from "@/hooks/useUsinas"
-import { toIso } from "@/lib/formatters"
 import { SummaryTab } from "./SummaryTab"
 import { FinanceiroTab } from "./FinanceiroTab"
 import { RegulatorioTab } from "./RegulatorioTab"
@@ -17,9 +15,7 @@ export default function PlantDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: usina, isLoading, error } = useUsina(id!)
-
-  const [inicio, setInicio] = useState(() => toIso(subDays(new Date(), 30)))
-  const [fim, setFim] = useState(() => toIso(new Date()))
+  const dateRange = usePlantDateRange(usina?.fonte)
 
   if (isLoading) return <div className="container mx-auto max-w-5xl px-4 py-8"><Skeleton className="h-12 w-64" /></div>
   if (error) return <div className="container mx-auto max-w-5xl px-4 py-8"><ErrorState error={error} /></div>
@@ -38,7 +34,13 @@ export default function PlantDetail() {
             </p>
           </div>
         </div>
-        <DateRangePicker onChange={(i, f) => { setInicio(i); setFim(f) }} />
+        <DateRangePicker
+          initialFrom={dateRange.inicio ? new Date(dateRange.inicio) : undefined}
+          initialTo={dateRange.fim ? new Date(dateRange.fim) : undefined}
+          minDate={dateRange.minDate}
+          maxDate={dateRange.maxDate}
+          onChange={dateRange.setRange}
+        />
       </div>
 
       <Tabs defaultValue="resumo">
@@ -49,15 +51,15 @@ export default function PlantDetail() {
         </TabsList>
 
         <TabsContent value="resumo">
-          <SummaryTab usinaId={id!} inicio={inicio} fim={fim} />
+          <SummaryTab usinaId={id!} inicio={dateRange.inicio} fim={dateRange.fim} />
         </TabsContent>
 
         <TabsContent value="financeiro">
-          <FinanceiroTab usinaId={id!} inicio={inicio} fim={fim} />
+          <FinanceiroTab usinaId={id!} inicio={dateRange.inicio} fim={dateRange.fim} />
         </TabsContent>
 
         <TabsContent value="regulatorio">
-          <RegulatorioTab usinaId={id!} inicio={inicio} fim={fim} />
+          <RegulatorioTab usinaId={id!} inicio={dateRange.inicio} fim={dateRange.fim} />
         </TabsContent>
       </Tabs>
     </div>

@@ -21,7 +21,7 @@ def perda_financeira(
     service=Depends(get_financeiro_service),
 ):
     try:
-        i, f = parse_range(inicio, fim, max_dias=90)
+        i, f = parse_range(inicio, fim, max_dias=366)
         out = service.calcular_perda(usina_id, i, f)
         total = len(out["serie"])
         out["paginacao_serie"] = {"total_count": total, "limit": limit, "offset": offset}
@@ -72,10 +72,10 @@ def simular_bess(
 ):
     if inicio is None or fim is None:
         fim_dt = datetime.utcnow()
-        inicio_dt = fim_dt - timedelta(days=30)
+        inicio_dt = fim_dt - timedelta(days=90)
     else:
         try:
-            inicio_dt, fim_dt = parse_range(inicio, fim, max_dias=90)
+            inicio_dt, fim_dt = parse_range(inicio, fim, max_dias=366)
         except DateRangeError as exc:
             raise api_error(422, "parametro_data_invalido", str(exc))
 

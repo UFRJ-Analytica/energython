@@ -28,11 +28,11 @@ export const useElegibilidade = (id: string, inicio: string, fim: string) =>
     staleTime: 30 * 60 * 1000,
   })
 
-export const useEventosPleito = (id: string, inicio: string, fim: string) =>
+export const useEventosPleito = (id: string, inicio: string, fim: string, enabled = true) =>
   useQuery({
     queryKey: ["eventos-pleito", id, inicio, fim],
     queryFn: () => getEventosPleito(id, inicio, fim),
-    enabled: !!id && !!inicio && !!fim,
+    enabled: enabled && !!id && !!inicio && !!fim,
     staleTime: 5 * 60 * 1000,
   })
 

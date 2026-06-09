@@ -1,14 +1,13 @@
-import { useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { subDays } from "date-fns"
 import { ArrowRight, CalendarClock, TrendingDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DateRangePicker } from "@/components/shared/DateRangePicker"
 import { ErrorState } from "@/components/shared/ErrorState"
-import { useUsinaResumo } from "@/hooks/useUsinas"
+import { usePlantDateRange } from "@/hooks/usePlantDateRange"
+import { useUsina, useUsinaResumo } from "@/hooks/useUsinas"
 import { useCountUp } from "@/hooks/useCountUp"
-import { fmtBRL, fmtMWh, fmtPct, fmtNum, toIso } from "@/lib/formatters"
+import { fmtBRL, fmtMWh, fmtPct, fmtNum } from "@/lib/formatters"
 
 function HeroNumber({ value }: { value: number }) {
   const counted = useCountUp(value)
@@ -26,10 +25,10 @@ function HeroNumber({ value }: { value: number }) {
 export default function Resumo() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [inicio, setInicio] = useState(() => toIso(subDays(new Date(), 30)))
-  const [fim, setFim] = useState(() => toIso(new Date()))
+  const usina = useUsina(id!)
+  const dateRange = usePlantDateRange(usina.data?.fonte)
 
-  const { data, isLoading, error } = useUsinaResumo(id!, inicio, fim)
+  const { data, isLoading, error } = useUsinaResumo(id!, dateRange.inicio, dateRange.fim, dateRange.ready)
 
 
   return (
@@ -41,7 +40,13 @@ export default function Resumo() {
           </p>
           <h2 className="mt-0.5 text-lg font-semibold text-foreground/80">Visão executiva de curtailment</h2>
         </div>
-        <DateRangePicker onChange={(i, f) => { setInicio(i); setFim(f) }} />
+        <DateRangePicker
+          initialFrom={dateRange.inicio ? new Date(dateRange.inicio) : undefined}
+          initialTo={dateRange.fim ? new Date(dateRange.fim) : undefined}
+          minDate={dateRange.minDate}
+          maxDate={dateRange.maxDate}
+          onChange={dateRange.setRange}
+        />
       </div>
 
       {error && <ErrorState error={error} />}
@@ -95,7 +100,7 @@ export default function Resumo() {
             <div className="sm:col-span-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 space-y-1">
               <div className="flex items-center gap-2 text-xs text-amber-400/70 uppercase tracking-widest">
                 <CalendarClock className="h-3.5 w-3.5" />
-                Previsão futura com ML (30 dias)
+                {data.perda_esperada_30d.metodo?.includes("ml") ? "Previsão futura com ML (30 dias)" : "Projeção futura sazonal (30 dias)"}
               </div>
               <div className="text-4xl font-bold text-amber-400">
                 {fmtBRL(data.perda_esperada_30d.valor_reais)}

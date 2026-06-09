@@ -1,8 +1,8 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { format, subDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { CalendarIcon } from "lucide-react"
-import type { DateRange } from "react-day-picker"
+import type { DateRange, Matcher } from "react-day-picker"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -11,13 +11,22 @@ import { toIso } from "@/lib/formatters"
 interface Props {
   onChange: (inicio: string, fim: string) => void
   defaultDays?: number
+  initialFrom?: Date
+  initialTo?: Date
+  minDate?: Date
+  maxDate?: Date
 }
 
-export function DateRangePicker({ onChange, defaultDays = 30 }: Props) {
-  const [range, setRange] = useState<DateRange>({
-    from: subDays(new Date(), defaultDays),
-    to: new Date(),
-  })
+export function DateRangePicker({ onChange, defaultDays = 90, initialFrom, initialTo, minDate, maxDate }: Props) {
+  const [range, setRange] = useState<DateRange>(() => ({
+    from: initialFrom ?? subDays(initialTo ?? maxDate ?? new Date(), defaultDays),
+    to: initialTo ?? maxDate ?? new Date(),
+  }))
+
+  useEffect(() => {
+    if (!initialFrom || !initialTo) return
+    setRange({ from: initialFrom, to: initialTo })
+  }, [initialFrom, initialTo])
 
   const handleSelect = (r?: DateRange) => {
     if (!r) return
@@ -30,6 +39,14 @@ export function DateRangePicker({ onChange, defaultDays = 30 }: Props) {
       ? `${format(range.from, "dd/MM/yy")} – ${format(range.to, "dd/MM/yy")}`
       : "Selecionar período"
 
+  const disabledRange: Matcher | undefined = minDate && maxDate
+    ? { before: minDate, after: maxDate }
+    : minDate
+      ? { before: minDate }
+      : maxDate
+        ? { after: maxDate }
+        : undefined
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -39,7 +56,14 @@ export function DateRangePicker({ onChange, defaultDays = 30 }: Props) {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="end">
-        <Calendar mode="range" selected={range} onSelect={handleSelect} locale={ptBR} numberOfMonths={2} />
+        <Calendar
+          mode="range"
+          selected={range}
+          onSelect={handleSelect}
+          locale={ptBR}
+          numberOfMonths={2}
+          disabled={disabledRange}
+        />
       </PopoverContent>
     </Popover>
   )

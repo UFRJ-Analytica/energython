@@ -73,10 +73,10 @@ def resumo_usina(
 
     if inicio is None or fim is None:
         fim_dt = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
-        inicio_dt = fim_dt - timedelta(days=30)
+        inicio_dt = fim_dt - timedelta(days=90)
     else:
         try:
-            inicio_dt, fim_dt = parse_range(inicio, fim, max_dias=90)
+            inicio_dt, fim_dt = parse_range(inicio, fim, max_dias=366)
         except DateRangeError as exc:
             raise api_error(422, "parametro_data_invalido", str(exc))
 

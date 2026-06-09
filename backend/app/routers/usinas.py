@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 
+from app.config import get_settings
 from app.deps import get_curtailment_service, get_financeiro_service, get_repo
 from app.domain.policies import RegulatorioPolicy
 from app.repositories.base import BaseRepository
@@ -13,8 +14,19 @@ from app.utils.http_errors import api_error
 
 
 router = APIRouter(prefix="/api", tags=["usinas"])
-usinas_list_cache = TTLCache(ttl_seconds=900)
-usina_detail_cache = TTLCache(ttl_seconds=900)
+_cache_settings = get_settings()
+usinas_list_cache = TTLCache(
+    name="usinas_list",
+    ttl_seconds=_cache_settings.cache_usinas_ttl_seconds,
+    max_entries=_cache_settings.cache_max_entries,
+    enabled=_cache_settings.cache_enabled,
+)
+usina_detail_cache = TTLCache(
+    name="usina_detail",
+    ttl_seconds=_cache_settings.cache_usinas_ttl_seconds,
+    max_entries=_cache_settings.cache_max_entries,
+    enabled=_cache_settings.cache_enabled,
+)
 
 
 @router.get("/usinas", response_model=UsinaListOut)

@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     curtailment_advanced_module_path: str = "models_ml/data_ml/models.py"
     curtailment_threshold_mwh: float = 1.0
 
+    # Cache para deploy/demo (in-memory por instância do backend)
+    cache_enabled: bool = True
+    cache_max_entries: int = 1024
+    cache_usinas_ttl_seconds: int = 1800
+    cache_financeiro_ttl_seconds: int = 1800
+    cache_regulatorio_ttl_seconds: int = 1800
+    cache_bess_ttl_seconds: int = 900
+    api_http_cache_seconds: int = 60
+    api_http_stale_while_revalidate_seconds: int = 300
+
     # Regras de elegibilidade regulatória (parametrizáveis por ambiente)
     elegivel_confiabilidade: bool = True
     elegivel_indisponibilidade_externa: bool = True

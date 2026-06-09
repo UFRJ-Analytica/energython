@@ -292,6 +292,12 @@ class FinanceiroService:
         return out
 
     def previsao_perdas_detalhada(self, usina_id: str, horizonte_horas: int = 48, historico_horas: int = 168) -> dict:
+        cache_key = f"financeiro:previsao_perdas:{usina_id}:{horizonte_horas}:{historico_horas}"
+        if self.cache:
+            cached = self.cache.get(cache_key)
+            if cached is not None:
+                return cached
+
         usina = self.repo.get_usina(usina_id)
         if not usina:
             raise ValueError("usina_nao_encontrada")
@@ -302,4 +308,6 @@ class FinanceiroService:
             historico_horas=historico_horas,
         )
         out["usina_id"] = usina_id
+        if self.cache:
+            self.cache.set(cache_key, out)
         return out

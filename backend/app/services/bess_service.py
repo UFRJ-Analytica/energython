@@ -6,8 +6,9 @@ from app.services.forecasting_utils import forecast_future_losses
 
 
 class BessService:
-    def __init__(self, repo):
+    def __init__(self, repo, cache=None):
         self.repo = repo
+        self.cache = cache
 
     def simular_bess(
         self,
@@ -19,6 +20,18 @@ class BessService:
         eficiencia: float = 0.85,
         capex: float | None = None,
     ) -> dict:
+        inicio_key = inicio.replace(minute=0, second=0, microsecond=0).isoformat()
+        fim_key = fim.replace(minute=0, second=0, microsecond=0).isoformat()
+        cache_key = (
+            f"bess:simular:{usina_id}:{inicio_key}:{fim_key}:"
+            f"p={float(potencia_bateria_mw):.4f}:d={float(duracao_horas):.4f}:"
+            f"e={float(eficiencia):.4f}:capex={float(capex or 0.0):.2f}"
+        )
+        if self.cache:
+            cached = self.cache.get(cache_key)
+            if cached is not None:
+                return cached
+
         usina = self.repo.get_usina(usina_id)
         if not usina:
             raise ValueError("usina_nao_encontrada")
@@ -63,7 +76,7 @@ class BessService:
         energia_recuperavel_futura = capturavel_futura * eficiencia
         perda_evitable_futura_reais = energia_recuperavel_futura * pld_medio_previsto
 
-        return {
+        out = {
             "usina_id": usina_id,
             "energia_recuperada_mwh": round(energia_salva, 4),
             "receita_recuperada_reais": round(receita, 2),
@@ -79,3 +92,6 @@ class BessService:
                 "perda_financeira_evitavel_prevista_reais": round(perda_evitable_futura_reais, 2),
             },
         }
+        if self.cache:
+            self.cache.set(cache_key, out)
+        return out

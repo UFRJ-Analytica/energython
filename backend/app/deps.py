@@ -17,8 +17,25 @@ from app.services.pleito_service import PleitoService
 from app.services.regulatorio_service import RegulatorioService
 from app.utils.simple_cache import TTLCache
 
-regulatorio_cache = TTLCache(ttl_seconds=1800)
-financeiro_cache = TTLCache(ttl_seconds=900)
+_cache_settings = get_settings()
+regulatorio_cache = TTLCache(
+    name="regulatorio",
+    ttl_seconds=_cache_settings.cache_regulatorio_ttl_seconds,
+    max_entries=_cache_settings.cache_max_entries,
+    enabled=_cache_settings.cache_enabled,
+)
+financeiro_cache = TTLCache(
+    name="financeiro",
+    ttl_seconds=_cache_settings.cache_financeiro_ttl_seconds,
+    max_entries=_cache_settings.cache_max_entries,
+    enabled=_cache_settings.cache_enabled,
+)
+bess_cache = TTLCache(
+    name="bess",
+    ttl_seconds=_cache_settings.cache_bess_ttl_seconds,
+    max_entries=_cache_settings.cache_max_entries,
+    enabled=_cache_settings.cache_enabled,
+)
 
 
 def get_repo(settings: Settings = Depends(get_settings), db=Depends(get_db_session)) -> BaseRepository:
@@ -42,7 +59,7 @@ def get_pleito_service(
 
 
 def get_bess_service(repo: BaseRepository = Depends(get_repo)) -> BessService:
-    return BessService(repo)
+    return BessService(repo, cache=bess_cache)
 
 
 def get_curtailment_service(

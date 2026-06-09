@@ -5,7 +5,6 @@ on:
     branches: [main]
 
 env:
-  REGISTRY: ghcr.io
   BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/energython-backend
   FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/energython-frontend
 
@@ -22,7 +21,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR
+      - name: Login GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -59,24 +58,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Copy docker-compose to VPS
+      - name: Copia docker-compose para VPS
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: docker-compose.yml
           target: /opt/energython
 
       - name: Deploy
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: DATABASE_URL,ANTHROPIC_API_KEY,CORS_ORIGINS,MVP_ONLY_NORDESTE,GHCR_TOKEN,GHCR_USER
           script: |
+            mkdir -p /opt/energython/backend
+
+            printf '%s\n' \
+              "DATABASE_URL=$DATABASE_URL" \
+              "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" \
+              "CORS_ORIGINS=$CORS_ORIGINS" \
+              "MVP_ONLY_NORDESTE=$MVP_ONLY_NORDESTE" \
+              "DATA_BACKEND=postgres" \
+              > /opt/energython/backend/.env
+
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             cd /opt/energython
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
             docker compose pull
             docker compose up -d --remove-orphans
             docker image prune -f
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+          MVP_ONLY_NORDESTE: ${{ secrets.MVP_ONLY_NORDESTE }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}

@@ -6,9 +6,11 @@ import Financeiro from "@/pages/Financeiro"
 import Simulador from "@/pages/Simulador"
 import Dossie from "@/pages/Dossie"
 import Chat from "@/pages/Chat"
+import Build from "@/pages/Build"
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/usinas" replace /> },
+  { path: "/build", element: <Build /> },
   { path: "/usinas", element: <Portfolio /> },
   {
     path: "/usinas/:id",

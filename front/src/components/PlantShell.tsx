@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useTheme } from "@/components/theme-provider"
 import { useUsina } from "@/hooks/useUsinas"
 import { cn } from "@/lib/utils"
+import { BuildFooter } from "@/components/shared/BuildFooter"
 
 const tabs = [
   { to: "", label: "Resumo", end: true },
@@ -20,7 +21,7 @@ export function PlantShell() {
   const { theme, setTheme } = useTheme()
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <header className="sticky top-0 z-40 border-b border-border/50 bg-background/90 backdrop-blur">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="flex h-14 items-center gap-4">
@@ -70,6 +71,8 @@ export function PlantShell() {
       </header>
 
       <Outlet />
+
+      <BuildFooter />
     </div>
   )
 }

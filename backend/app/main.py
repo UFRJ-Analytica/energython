@@ -1,3 +1,6 @@
+import subprocess
+from datetime import datetime, timezone
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,6 +11,17 @@ from app.routers.pleito import router as pleito_router
 from app.routers.regulatorio import router as regulatorio_router
 from app.routers.usinas import router as usinas_router
 from app.utils.logging_utils import configure_logging, request_logger_middleware
+
+
+def _git_hash() -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
+    except Exception:
+        return "unknown"
+
+
+_BACK_BUILD_TIME = datetime.now(timezone.utc).isoformat()
+_BACK_GIT_HASH = _git_hash()
 
 settings = get_settings()
 configure_logging()
@@ -32,6 +46,14 @@ app.include_router(pleito_router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/build-info")
+def build_info():
+    return {
+        "git_hash": _BACK_GIT_HASH,
+        "build_time": _BACK_BUILD_TIME,
+    }
 
 
 @app.get("/readiness")

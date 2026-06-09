@@ -11,6 +11,7 @@ import { fmtMW } from "@/lib/formatters"
 import { FONTES, SUBMERCADOS } from "@/lib/constants"
 import type { UsinaOut } from "@/types/usinas"
 import { PlantMap } from "./PlantMap"
+import { BuildFooter } from "@/components/shared/BuildFooter"
 
 function PlantRow({ usina }: { usina: UsinaOut }) {
   const navigate = useNavigate()
@@ -56,7 +57,7 @@ export default function Portfolio() {
   const { data: allUsinas } = useAllUsinas(filters)
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <header className="flex items-center justify-between border-b border-border/50 px-6 py-3">
         <img src="/logo.png" alt="CurtailIQ" className="h-7 w-auto object-contain" />
         <Button variant="ghost" size="icon" className="h-8 w-8"
@@ -121,6 +122,8 @@ export default function Portfolio() {
           </div>
         )}
       </main>
+
+      <BuildFooter />
     </div>
   )
 }

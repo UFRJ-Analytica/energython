@@ -42,7 +42,7 @@ export function PlantShell() {
               <span className="text-sm font-medium truncate max-w-48">{usina?.nome}</span>
             )}
 
-            <nav className="ml-auto flex items-center gap-1">
+            <nav className="ml-auto flex items-center gap-1 overflow-x-auto scrollbar-none">
               {tabs.map((t) => (
                 <NavLink
                   key={t.to}
@@ -50,7 +50,7 @@ export function PlantShell() {
                   end={t.end}
                   className={({ isActive }) =>
                     cn(
-                      "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                      "shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                       isActive
                         ? "bg-teal-500/15 text-teal-400"
                         : "text-muted-foreground hover:text-foreground"

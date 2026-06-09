@@ -7,11 +7,33 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTheme } from "@/components/theme-provider"
 import { useAllUsinas, useUsinas } from "@/hooks/useUsinas"
+import { usePersistedState } from "@/hooks/usePersistedState"
 import { fmtMW } from "@/lib/formatters"
 import { FONTES, SUBMERCADOS } from "@/lib/constants"
 import type { UsinaOut } from "@/types/usinas"
 import { PlantMap } from "./PlantMap"
 import { BuildFooter } from "@/components/shared/BuildFooter"
+
+function PlantCard({ usina }: { usina: UsinaOut }) {
+  const navigate = useNavigate()
+  return (
+    <div
+      className="flex items-center justify-between rounded-lg border border-border/40 p-4 cursor-pointer transition-colors hover:bg-muted/30 active:bg-muted/50"
+      onClick={() => navigate(`/usinas/${usina.usina_id}`)}
+    >
+      <div className="flex items-center gap-3">
+        {usina.fonte === "solar"
+          ? <SunIcon className="h-4 w-4 shrink-0 text-amber-400" />
+          : <Wind className="h-4 w-4 shrink-0 text-sky-400" />}
+        <div>
+          <p className="font-medium text-sm">{usina.nome}</p>
+          <p className="text-xs text-muted-foreground capitalize">{usina.fonte} · {fmtMW(usina.potencia_mw)}</p>
+        </div>
+      </div>
+      <Badge variant="outline" className="text-xs shrink-0">{usina.submercado}</Badge>
+    </div>
+  )
+}
 
 function PlantRow({ usina }: { usina: UsinaOut }) {
   const navigate = useNavigate()
@@ -37,10 +59,25 @@ function PlantRow({ usina }: { usina: UsinaOut }) {
   )
 }
 
+function LoadingSkeleton() {
+  const widths = ["w-48", "w-36", "w-52", "w-40", "w-44", "w-56", "w-36", "w-48"]
+  return (
+    <div className="space-y-px">
+      {widths.map((w, i) => (
+        <div key={i} className="flex items-center gap-3 border-b border-border/40 py-3">
+          <Skeleton className="h-4 w-4 shrink-0 rounded-full" />
+          <Skeleton className={`h-4 ${w}`} />
+          <Skeleton className="ml-auto h-4 w-12" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function Portfolio() {
   const { theme, setTheme } = useTheme()
-  const [fonte, setFonte] = useState("all")
-  const [submercado, setSubmercado] = useState("NE")
+  const [fonte, setFonte] = usePersistedState("portfolio.fonte", "all")
+  const [submercado, setSubmercado] = usePersistedState("portfolio.submercado", "NE")
   const [offset, setOffset] = useState(0)
   const LIMIT = 15
 
@@ -49,16 +86,12 @@ export default function Portfolio() {
     submercado: submercado !== "all" ? submercado : undefined,
   }
 
-  const { data, isLoading } = useUsinas({
-    ...filters,
-    limit: LIMIT,
-    offset,
-  })
+  const { data, isLoading } = useUsinas({ ...filters, limit: LIMIT, offset })
   const { data: allUsinas } = useAllUsinas(filters)
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="flex items-center justify-between border-b border-border/50 px-6 py-3">
+      <header className="flex items-center justify-between border-b border-border/50 px-4 py-3 sm:px-6">
         <img src="/logo.png" alt="CurtailIQ" className="h-7 w-auto object-contain" />
         <Button variant="ghost" size="icon" className="h-8 w-8"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
@@ -66,13 +99,13 @@ export default function Portfolio() {
         </Button>
       </header>
 
-      <main className="container mx-auto max-w-3xl px-6 py-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold">Portfólio de Usinas</h1>
+      <main className="container mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-xl font-bold sm:text-2xl">Portfólio de Usinas</h1>
           <p className="mt-1 text-sm text-muted-foreground">Selecione uma usina para analisar curtailment</p>
         </div>
 
-        <div className="mb-4 flex gap-3">
+        <div className="mb-4 flex flex-wrap gap-2 sm:gap-3">
           <Select value={fonte} onValueChange={(v) => { setFonte(v); setOffset(0) }}>
             <SelectTrigger className="w-36 h-8 text-xs">
               <SelectValue placeholder="Fonte" />
@@ -94,23 +127,32 @@ export default function Portfolio() {
         </div>
 
         {isLoading ? (
-          <div className="space-y-3">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          <LoadingSkeleton />
         ) : (
           <>
-            {allUsinas && allUsinas.length > 0 && <div className="mb-4"><PlantMap usinas={allUsinas} /></div>}
-            <table className="w-full">
-            <thead>
-              <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
-                <th className="pb-2 pr-4 font-medium">Usina</th>
-                <th className="pb-2 pr-4 font-medium">Fonte</th>
-                <th className="pb-2 pr-4 font-medium">Capacidade</th>
-                <th className="pb-2 font-medium">Submercado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.items.map((u) => <PlantRow key={u.usina_id} usina={u} />)}
-            </tbody>
-          </table>
+            {allUsinas && allUsinas.length > 0 && (
+              <div className="mb-4"><PlantMap usinas={allUsinas} /></div>
+            )}
+
+            {/* Mobile: cards */}
+            <div className="flex flex-col gap-2 sm:hidden">
+              {data?.items.map((u) => <PlantCard key={u.usina_id} usina={u} />)}
+            </div>
+
+            {/* Desktop: tabela */}
+            <table className="hidden w-full sm:table">
+              <thead>
+                <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
+                  <th className="pb-2 pr-4 font-medium">Usina</th>
+                  <th className="pb-2 pr-4 font-medium">Fonte</th>
+                  <th className="pb-2 pr-4 font-medium">Capacidade</th>
+                  <th className="pb-2 font-medium">Submercado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data?.items.map((u) => <PlantRow key={u.usina_id} usina={u} />)}
+              </tbody>
+            </table>
           </>
         )}
 

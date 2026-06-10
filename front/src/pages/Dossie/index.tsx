@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react"
 import { useParams } from "react-router-dom"
-import { Check, Copy, Download, FileText } from "lucide-react"
+import { Check, Copy, Download, FileText, Loader2 } from "lucide-react"
 import Markdown from "react-markdown"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -61,6 +61,10 @@ export default function Dossie() {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
   const [copied, setCopied] = useState(false)
+  const [generationFeedback, setGenerationFeedback] = useState<{ visible: boolean; message: string; cacheHit?: boolean }>({
+    visible: false,
+    message: "",
+  })
   const pleitoRef = useRef<HTMLDivElement | null>(null)
 
   const { data, isLoading, error } = useEventosPleito(id!, dateRange.inicio, dateRange.fim, dateRange.ready)
@@ -89,6 +93,7 @@ export default function Dossie() {
   const selectedCanal = selectedEventos[0]?.canal_recomendado ?? "PROTOCOLO_ONS"
   const canalMixed = new Set(selectedEventos.map((ev) => ev.canal_recomendado)).size > 1
   const pleitoMarkdown = draft || criarPleito.data?.markdown_gerado || ""
+  const isGeneratingPleito = criarPleito.isPending || generationFeedback.visible
 
   const toggleSelected = (eventId: string, checked: boolean | "indeterminate") => {
     setSelectedIds((prev) => {
@@ -102,13 +107,40 @@ export default function Dossie() {
   }
 
   const gerarPleito = (eventosIds = selectedIds, canal = selectedCanal) => {
+    const startedAt = Date.now()
+    setDraft("")
+    setEditing(false)
+    setGenerationFeedback({
+      visible: true,
+      message: "Estruturando o pleito com os eventos selecionados…",
+    })
+    window.setTimeout(() => pleitoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50)
+
     criarPleito.mutate(
       { eventos_ids: eventosIds, canal, inicio: dateRange.inicio, fim: dateRange.fim },
       {
         onSuccess: (res) => {
-          setDraft(res.markdown_gerado)
-          setEditing(false)
-          window.setTimeout(() => pleitoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50)
+          const cacheHit = Boolean((res.metadados_json?.cache_ia as { hit?: boolean } | undefined)?.hit)
+          const elapsed = Date.now() - startedAt
+          const minVisibleMs = cacheHit ? 900 : 1200
+          const maxCachedMs = 5000
+          const delayMs = cacheHit ? Math.max(0, Math.min(minVisibleMs - elapsed, maxCachedMs - elapsed)) : Math.max(0, minVisibleMs - elapsed)
+          if (cacheHit) {
+            setGenerationFeedback({
+              visible: true,
+              cacheHit: true,
+              message: "Pleito encontrado em cache. Preparando visualização…",
+            })
+          }
+          window.setTimeout(() => {
+            setDraft(res.markdown_gerado)
+            setEditing(false)
+            setGenerationFeedback({ visible: false, message: "", cacheHit })
+            window.setTimeout(() => pleitoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50)
+          }, delayMs)
+        },
+        onError: () => {
+          setGenerationFeedback({ visible: false, message: "" })
         },
       },
     )
@@ -165,7 +197,7 @@ export default function Dossie() {
             <KpiCard title="Franquia usada" value={`${fmtNum(data.franquia.horas_definidas)} h`} />
           </div>
 
-          {(pleitoMarkdown || criarPleito.isPending || criarPleito.error || exportarPleito.error) && (
+          {(pleitoMarkdown || isGeneratingPleito || criarPleito.error || exportarPleito.error) && (
             <Card ref={pleitoRef} className="border-teal-500/30 bg-teal-500/5 scroll-mt-20">
               <CardHeader className="pb-2">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -188,8 +220,24 @@ export default function Dossie() {
                 </div>
                 {criarPleito.error && <ErrorState error={criarPleito.error} />}
                 {exportarPleito.error && <ErrorState error={exportarPleito.error} />}
-                {criarPleito.isPending ? (
-                  <Skeleton className="h-72 w-full rounded-md" />
+                {isGeneratingPleito ? (
+                  <div className="relative overflow-hidden rounded-md border border-teal-500/30 bg-gradient-to-br from-teal-500/10 via-background to-blue-500/10 p-6">
+                    <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-teal-400 via-cyan-400 to-blue-500" />
+                    <div className="flex min-h-64 flex-col items-center justify-center text-center">
+                      <div className="mb-4 rounded-full border border-teal-500/30 bg-teal-500/10 p-4 shadow-[0_0_40px_rgba(20,184,166,0.22)]">
+                        <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
+                      </div>
+                      <h3 className="text-lg font-semibold">Gerando pleito de ressarcimento</h3>
+                      <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+                        {generationFeedback.message || "Calculando elegibilidade, franquia, PLD, prazos e preparando a redação para revisão humana."}
+                      </p>
+                      <div className="mt-5 grid w-full max-w-2xl grid-cols-1 gap-2 text-left text-xs text-muted-foreground sm:grid-cols-3">
+                        <div className="rounded-md border bg-background/70 p-3">Eventos e franquia validados</div>
+                        <div className="rounded-md border bg-background/70 p-3">Canal regulatório definido</div>
+                        <div className="rounded-md border bg-background/70 p-3">{generationFeedback.cacheHit ? "Resultado cacheado em até 5s" : "IA apenas para redação"}</div>
+                      </div>
+                    </div>
+                  </div>
                 ) : editing ? (
                   <textarea className="h-[420px] w-full rounded-md border bg-background p-3 text-sm" value={draft} onChange={(e) => setDraft(e.target.value)} />
                 ) : (
@@ -254,7 +302,7 @@ export default function Dossie() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Button size="sm" variant="outline" disabled={!ev.elegivel || criarPleito.isPending} onClick={() => gerarPleito([ev.evento_id], ev.canal_recomendado)}>
+                          <Button size="sm" variant="outline" disabled={!ev.elegivel || isGeneratingPleito} onClick={() => gerarPleito([ev.evento_id], ev.canal_recomendado)}>
                             Gerar
                           </Button>
                         </TableCell>
@@ -283,9 +331,9 @@ export default function Dossie() {
               {canalMixed && <Badge variant="destructive">Há canais mistos selecionados; gere pleitos separados por canal.</Badge>}
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary">Canal: {canalLabel[selectedCanal] ?? selectedCanal}</Badge>
-                <Button size="sm" className="gap-2 bg-teal-600 hover:bg-teal-700 text-white" disabled={!selectedIds.length || canalMixed || criarPleito.isPending} onClick={() => gerarPleito()}>
+                <Button size="sm" className="gap-2 bg-teal-600 hover:bg-teal-700 text-white" disabled={!selectedIds.length || canalMixed || isGeneratingPleito} onClick={() => gerarPleito()}>
                   <FileText className="h-4 w-4" />
-                  {criarPleito.isPending ? "Gerando…" : "Gerar pleito selecionado"}
+                  {isGeneratingPleito ? "Gerando…" : "Gerar pleito selecionado"}
                 </Button>
               </div>
               <ScrollArea className="h-72 rounded-md border p-2">

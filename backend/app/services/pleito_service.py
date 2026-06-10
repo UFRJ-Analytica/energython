@@ -19,10 +19,11 @@ PLEITOS_STORE: dict[str, dict[str, Any]] = {}
 
 
 class PleitoService:
-    def __init__(self, repo, dossier_agent, financeiro_policy: FinanceiroPolicy | None = None):
+    def __init__(self, repo, dossier_agent, financeiro_policy: FinanceiroPolicy | None = None, cache=None):
         self.repo = repo
         self.dossier_agent = dossier_agent
         self.financeiro_policy = financeiro_policy or FinanceiroPolicy.default()
+        self.cache = cache
 
     @staticmethod
     def _as_datetime(value: Any) -> datetime:
@@ -189,7 +190,29 @@ class PleitoService:
             pass
         pacote = self._montar_pacote(usina_id, canal, eventos, eventos_payload)
         template_md = self._render_template(pacote)
-        markdown = self.dossier_agent.gerar_pleito_evento(pacote, template_md)
+        pacote_hash = hashlib.sha256(json.dumps(pacote, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+        cache_key = f"pleito:ia:v1:{pacote_hash}"
+        cache_key_sha256 = hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
+        cache_hit = False
+        cached = self.cache.get(cache_key) if self.cache else None
+        if cached is not None:
+            markdown = str(cached.get("markdown_gerado") or "")
+            cache_hit = bool(markdown)
+        else:
+            markdown = ""
+
+        if not markdown:
+            markdown = self.dossier_agent.gerar_pleito_evento(pacote, template_md)
+            if self.cache:
+                self.cache.set(
+                    cache_key,
+                    {
+                        "markdown_gerado": markdown,
+                        "pacote_hash_sha256": pacote_hash,
+                        "gerado_em": datetime.utcnow().isoformat(),
+                    },
+                )
+
         now = datetime.utcnow().isoformat()
         pleito_id = str(uuid.uuid4())
         pleito = {
@@ -201,7 +224,12 @@ class PleitoService:
             "markdown_gerado": markdown,
             "metadados_json": {
                 "pacote_estruturado": pacote,
-                "pacote_hash_sha256": hashlib.sha256(json.dumps(pacote, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest(),
+                "pacote_hash_sha256": pacote_hash,
+                "cache_ia": {
+                    "hit": cache_hit,
+                    "cache_key_sha256": cache_key_sha256,
+                    "ttl_controlado_por": "CACHE_PLEITO_TTL_SECONDS",
+                },
             },
             "criado_em": now,
             "atualizado_em": now,

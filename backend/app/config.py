@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     cache_financeiro_ttl_seconds: int = 1800
     cache_regulatorio_ttl_seconds: int = 1800
     cache_bess_ttl_seconds: int = 900
+    cache_pleito_ttl_seconds: int = 86400
     api_http_cache_seconds: int = 60
     api_http_stale_while_revalidate_seconds: int = 300
 

@@ -36,6 +36,12 @@ bess_cache = TTLCache(
     max_entries=_cache_settings.cache_max_entries,
     enabled=_cache_settings.cache_enabled,
 )
+pleito_cache = TTLCache(
+    name="pleito_ia",
+    ttl_seconds=_cache_settings.cache_pleito_ttl_seconds,
+    max_entries=_cache_settings.cache_max_entries,
+    enabled=_cache_settings.cache_enabled,
+)
 
 
 def get_repo(settings: Settings = Depends(get_settings), db=Depends(get_db_session)) -> BaseRepository:
@@ -55,7 +61,7 @@ def get_pleito_service(
 ) -> PleitoService:
     llm = AnthropicClient(api_key=settings.anthropic_api_key)
     dossier = DossierAgent(llm, model=settings.anthropic_model_smart)
-    return PleitoService(repo=repo, dossier_agent=dossier)
+    return PleitoService(repo=repo, dossier_agent=dossier, cache=pleito_cache)
 
 
 def get_bess_service(repo: BaseRepository = Depends(get_repo)) -> BessService:

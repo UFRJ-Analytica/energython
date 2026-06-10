@@ -92,7 +92,11 @@ def resumo_usina(
         except DateRangeError as exc:
             raise api_error(422, "parametro_data_invalido", str(exc))
 
-    perda = financeiro.calcular_perda_resumida(usina_id, inicio_dt, fim_dt)
+    # Keep the executive summary numerically aligned with the Financeiro tab.
+    # The previous aggregate shortcut can diverge from the detailed endpoint when
+    # source tables normalize timestamps/reasons differently. Cache keeps this
+    # acceptable for the MVP.
+    perda = financeiro.calcular_perda(usina_id, inicio_dt, fim_dt)
     policy = RegulatorioPolicy.default()
 
     total_perda = perda["total_perda_reais"]

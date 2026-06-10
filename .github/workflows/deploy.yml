@@ -67,6 +67,8 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          timeout: 90s
+          command_timeout: 20m
           envs: DATABASE_URL,ANTHROPIC_API_KEY,CORS_ORIGINS,MVP_ONLY_NORDESTE,GHCR_TOKEN,GHCR_USER,COMPOSE_B64
           script: |
             mkdir -p ~/energython/backend
@@ -77,6 +79,15 @@ jobs:
               "CORS_ORIGINS=$CORS_ORIGINS" \
               "MVP_ONLY_NORDESTE=$MVP_ONLY_NORDESTE" \
               "DATA_BACKEND=postgres" \
+              "CACHE_ENABLED=true" \
+              "CACHE_MAX_ENTRIES=1024" \
+              "CACHE_USINAS_TTL_SECONDS=1800" \
+              "CACHE_FINANCEIRO_TTL_SECONDS=1800" \
+              "CACHE_REGULATORIO_TTL_SECONDS=1800" \
+              "CACHE_BESS_TTL_SECONDS=900" \
+              "CACHE_PLEITO_TTL_SECONDS=86400" \
+              "API_HTTP_CACHE_SECONDS=60" \
+              "API_HTTP_STALE_WHILE_REVALIDATE_SECONDS=300" \
               > ~/energython/backend/.env
 
             echo "$COMPOSE_B64" | base64 -d > ~/energython/docker-compose.yml

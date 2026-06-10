@@ -234,7 +234,7 @@ export default function Dossie() {
                       <div className="mt-5 grid w-full max-w-2xl grid-cols-1 gap-2 text-left text-xs text-muted-foreground sm:grid-cols-3">
                         <div className="rounded-md border bg-background/70 p-3">Eventos e franquia validados</div>
                         <div className="rounded-md border bg-background/70 p-3">Canal regulatório definido</div>
-                        <div className="rounded-md border bg-background/70 p-3">{generationFeedback.cacheHit ? "Resultado cacheado em até 5s" : "IA apenas para redação"}</div>
+                        <div className="rounded-md border bg-background/70 p-3">{generationFeedback.cacheHit ? "Contexto da usina reaproveitado em até 5s" : "IA usando o contexto da usina para redigir"}</div>
                       </div>
                     </div>
                   </div>

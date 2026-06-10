@@ -25,9 +25,9 @@ export function PlantShell() {
       <header className="sticky top-0 z-40 border-b border-border/50 bg-background/90 backdrop-blur">
         <div className="container mx-auto max-w-6xl px-4">
           <div className="flex h-14 items-center gap-4">
-            <Link to="/usinas">
+            <a href="https://energython.cognati.tech/" aria-label="Ir para a página inicial do CurtailIQ">
               <img src="/logo.png" alt="CurtailIQ" className="h-6 w-auto object-contain" />
-            </Link>
+            </a>
 
             <Link to="/usinas" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
               <ChevronLeft className="h-3 w-3" />

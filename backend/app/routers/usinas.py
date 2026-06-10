@@ -100,7 +100,12 @@ def resumo_usina(
     policy = RegulatorioPolicy.default()
 
     total_perda = perda["total_perda_reais"]
-    total_eventos = int(perda.get("total_eventos") or 0)
+    total_eventos = int(
+        perda.get("total_eventos")
+        or perda.get("qualidade_dados", {}).get("total_eventos")
+        or len(perda.get("serie") or [])
+        or 0
+    )
     ticket_medio = (total_perda / total_eventos) if total_eventos else 0.0
     perda_ressarcivel = sum(
         float(v or 0.0)

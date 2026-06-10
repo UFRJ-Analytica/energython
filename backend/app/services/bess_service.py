@@ -76,6 +76,7 @@ class BessService:
         energia_recuperavel_futura = capturavel_futura * eficiencia
         perda_evitable_futura_reais = energia_recuperavel_futura * pld_medio_previsto
 
+        metadados_previsao = previsao_futura.get("metadados_previsao") or {}
         out = {
             "usina_id": usina_id,
             "energia_recuperada_mwh": round(energia_salva, 4),
@@ -90,6 +91,7 @@ class BessService:
                 "energia_perdida_prevista_mwh": round(energia_prevista, 4),
                 "energia_recuperavel_prevista_mwh": round(energia_recuperavel_futura, 4),
                 "perda_financeira_evitavel_prevista_reais": round(perda_evitable_futura_reais, 2),
+                "metadados_previsao": metadados_previsao,
             },
         }
         if self.cache:

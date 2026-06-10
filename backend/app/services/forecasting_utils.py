@@ -186,6 +186,107 @@ def _build_energy_seasonal_forecast(
     return out
 
 
+
+
+
+def _floor_hour(dt: datetime) -> datetime:
+    return dt.replace(minute=0, second=0, microsecond=0)
+
+
+def _build_dense_hourly_energy_series(eventos_hist, start: datetime, end: datetime) -> list[tuple[datetime, float]]:
+    """Build a complete hourly historical series, treating hours without events as 0 MWh.
+
+    This is intentionally conservative for MVP BESS sizing: curtailment is episodic,
+    so forecasting from event-only averages inflates future loss frequency.
+    """
+    start_h = _floor_hour(start)
+    end_h = _floor_hour(end)
+    by_hour = defaultdict(float)
+    for e in eventos_hist:
+        ts = _floor_hour(e.timestamp)
+        if start_h <= ts <= end_h:
+            by_hour[ts] += max(0.0, float(e.energia_restringida_mwh or 0.0))
+
+    out: list[tuple[datetime, float]] = []
+    current = start_h
+    while current <= end_h:
+        out.append((current, by_hour.get(current, 0.0)))
+        current += timedelta(hours=1)
+    return out
+
+
+def _mean_by_hour(rows: list[tuple[datetime, float]]) -> dict[int, float]:
+    grouped = defaultdict(list)
+    for ts, val in rows:
+        grouped[ts.hour].append(val)
+    return {hour: _hourly_mean(vals) for hour, vals in grouped.items()}
+
+
+def _build_energy_moving_average_forecast(
+    eventos_hist,
+    horizon_hours: int,
+    now: datetime,
+) -> tuple[list[dict], dict]:
+    hist_30_start = now - timedelta(days=30)
+    hist_7_start = now - timedelta(days=7)
+    dense_30 = _build_dense_hourly_energy_series(eventos_hist, hist_30_start, now)
+    dense_7 = [(ts, val) for ts, val in dense_30 if ts >= _floor_hour(hist_7_start)]
+
+    total_30 = sum(val for _, val in dense_30)
+    total_7 = sum(val for _, val in dense_7)
+    avg_30_global = _hourly_mean([val for _, val in dense_30])
+    avg_7_global = _hourly_mean([val for _, val in dense_7])
+    by_hour_30 = _mean_by_hour(dense_30)
+    by_hour_7 = _mean_by_hour(dense_7)
+
+    raw_items = []
+    raw_total = 0.0
+    for i in range(horizon_hours):
+        ts = now + timedelta(hours=i)
+        pred = (
+            0.60 * by_hour_30.get(ts.hour, avg_30_global)
+            + 0.25 * by_hour_7.get(ts.hour, avg_7_global)
+            + 0.15 * avg_30_global
+        )
+        pred = max(0.0, pred)
+        raw_total += pred
+        raw_items.append((ts, pred))
+
+    horizon_days = max(horizon_hours / 24.0, 1 / 24.0)
+    scale_to_30d = horizon_days / 30.0
+    expected_7_for_30_window = total_30 * (7 / 30) if total_30 > 0 else 0.0
+    recent_spike = bool(expected_7_for_30_window > 0 and total_7 > expected_7_for_30_window * 1.5)
+    cap_multiplier_30d = 1.30 if recent_spike else 1.15
+    cap_for_horizon = total_30 * cap_multiplier_30d * scale_to_30d
+
+    guardrail_applied = total_30 <= 0 < raw_total or (cap_for_horizon > 0 and raw_total > cap_for_horizon)
+    adjusted_total = 0.0 if total_30 <= 0 else min(raw_total, cap_for_horizon if cap_for_horizon > 0 else raw_total)
+    factor = (adjusted_total / raw_total) if raw_total > 0 else 0.0
+
+    out = []
+    for ts, raw_pred in raw_items:
+        pred = raw_pred * factor
+        out.append(
+            {
+                "timestamp": ts,
+                "energia_prevista_mwh": round(pred, 4),
+                "prob_corte": 0.5 if pred > 0 else 0.0,
+                "fonte": "media_movel_7_30d_com_zeros_guardrail",
+            }
+        )
+
+    metadata = {
+        "historico_base_30d_mwh": round(total_30, 4),
+        "historico_base_7d_mwh": round(total_7, 4),
+        "previsao_bruta_mwh": round(raw_total, 4),
+        "previsao_ajustada_mwh": round(adjusted_total, 4),
+        "guardrail_aplicado": guardrail_applied,
+        "teto_multiplicador_30d": cap_multiplier_30d,
+        "recent_spike": recent_spike,
+    }
+    return out, metadata
+
+
 def _build_pld_seasonal_forecast(pld_hist, horizon_hours: int, now: datetime) -> list[dict]:
     by_hour = defaultdict(list)
     by_weekday_hour = defaultdict(list)
@@ -246,7 +347,8 @@ def forecast_future_losses(
     pld_forecast = _build_pld_seasonal_forecast(pld_hist, horizon_hours=horizon_hours, now=now)
     pld_map = {item["timestamp"]: item["pld_previsto_reais_mwh"] for item in pld_forecast}
 
-    method = "fallback_sazonal"
+    method = "media_movel_7_30d_com_zeros_guardrail"
+    forecast_metadata = {}
 
     if use_ml:
         try:
@@ -287,13 +389,13 @@ def forecast_future_losses(
                             }
                         )
                 else:
-                    energy_forecast = _build_energy_seasonal_forecast(eventos_hist, horizon_hours, now)
+                    energy_forecast, forecast_metadata = _build_energy_moving_average_forecast(eventos_hist, horizon_hours, now)
             else:
-                energy_forecast = _build_energy_seasonal_forecast(eventos_hist, horizon_hours, now)
+                energy_forecast, forecast_metadata = _build_energy_moving_average_forecast(eventos_hist, horizon_hours, now)
         except Exception:
-            energy_forecast = _build_energy_seasonal_forecast(eventos_hist, horizon_hours, now)
+            energy_forecast, forecast_metadata = _build_energy_moving_average_forecast(eventos_hist, horizon_hours, now)
     else:
-        energy_forecast = _build_energy_seasonal_forecast(eventos_hist, horizon_hours, now)
+        energy_forecast, forecast_metadata = _build_energy_moving_average_forecast(eventos_hist, horizon_hours, now)
 
     series = []
     total_energy = 0.0
@@ -316,7 +418,7 @@ def forecast_future_losses(
             }
         )
 
-    if metodo_cache and method == "fallback_sazonal":
+    if metodo_cache and method in {"fallback_sazonal", "media_movel_7_30d_com_zeros_guardrail"}:
         method = f"{method}+{metodo_cache}"
 
     return {
@@ -325,6 +427,7 @@ def forecast_future_losses(
         "energia_total_prevista_mwh": round(total_energy, 4),
         "perda_total_prevista_reais": round(total_financial, 2),
         "serie_previsao": series,
+        "metadados_previsao": forecast_metadata,
     }
 
 

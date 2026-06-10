@@ -1,4 +1,4 @@
-import { Link, Outlet, useLocation } from "react-router-dom"
+import { Outlet, useLocation } from "react-router-dom"
 import { Moon, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useTheme } from "@/components/theme-provider"
@@ -13,9 +13,9 @@ export function Layout() {
       {!isHome && (
         <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
           <div className="container mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-            <Link to="/">
+            <a href="https://energython.cognati.tech/" aria-label="Ir para a página inicial do CurtailIQ">
               <img src="/logo.png" alt="CurtailIQ" className="h-7 w-auto object-contain" />
-            </Link>
+            </a>
             <Button
               variant="ghost"
               size="icon"

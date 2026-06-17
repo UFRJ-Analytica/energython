@@ -70,6 +70,8 @@ export interface EventoPleito {
   data_inicio: string
   data_fim: string
   duracao_horas: number
+  n_intervalos?: number
+  source_interval_ids?: string[]
   razao_classificada_ons: "REL" | "CNF" | "ENE" | string
   razao_original?: string | null
   origem: string
@@ -77,6 +79,7 @@ export interface EventoPleito {
   geracao_referencia_ons_mwh: number
   energia_restringida_mwh: number
   pld_reais_mwh: number
+  valor_intervalos_reais?: number | null
   submercado: string
   elegivel: boolean
   canal_recomendado: "PROTOCOLO_ONS" | "TERMO_COMPROMISSO_LEI_15269" | "NENHUM" | string
@@ -84,6 +87,7 @@ export interface EventoPleito {
   fonte_normativa: string
   confianca: number
   status_franquia: string
+  status_franquia_label?: string | null
   horas_acumuladas_antes: number
   horas_acumuladas_depois: number
   energia_ressarcivel_mwh: number
@@ -99,6 +103,7 @@ export interface EventosPleitoOut {
   periodo: { inicio: string; fim: string }
   franquia: { ano: number; fonte: string; horas_definidas: number; fonte_normativa: string }
   total_eventos: number
+  total_intervalos_restricao?: number
   eventos_elegiveis: number
   valor_total_pleitavel_reais: number
   energia_ressarcivel_total_mwh: number

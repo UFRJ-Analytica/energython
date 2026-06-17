@@ -31,6 +31,8 @@ class EventoPleitoOut(BaseModel):
     data_inicio: str
     data_fim: str
     duracao_horas: float
+    n_intervalos: int = 1
+    source_interval_ids: list[str] = Field(default_factory=list)
     razao_classificada_ons: str
     razao_original: str | None = None
     origem: str
@@ -38,6 +40,7 @@ class EventoPleitoOut(BaseModel):
     geracao_referencia_ons_mwh: float
     energia_restringida_mwh: float
     pld_reais_mwh: float
+    valor_intervalos_reais: float | None = None
     submercado: str
     elegivel: bool
     canal_recomendado: str
@@ -45,6 +48,7 @@ class EventoPleitoOut(BaseModel):
     fonte_normativa: str
     confianca: float
     status_franquia: str
+    status_franquia_label: str | None = None
     horas_acumuladas_antes: float
     horas_acumuladas_depois: float
     energia_ressarcivel_mwh: float
@@ -60,6 +64,7 @@ class EventosPleitoOut(BaseModel):
     periodo: dict
     franquia: dict
     total_eventos: int
+    total_intervalos_restricao: int = 0
     eventos_elegiveis: int
     valor_total_pleitavel_reais: float
     energia_ressarcivel_total_mwh: float

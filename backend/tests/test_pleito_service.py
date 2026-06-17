@@ -12,6 +12,59 @@ class FakeLLM:
         return '{"status":"mock","message":"anthropic_disabled"}'
 
 
+class RepoPleitoEventizacao(MockRepository):
+    def get_usina(self, usina_id: str):
+        return {"usina_id": usina_id, "nome": "Sol do Piauí", "fonte": "Solar", "submercado": "NE"}
+
+    def get_constrained_off(self, usina_id: str, inicio: datetime, fim: datetime):
+        return [
+            {
+                "usina_id": usina_id,
+                "timestamp": datetime.fromisoformat("2026-03-10T10:00:00"),
+                "fonte": "Solar",
+                "energia_restringida_mwh": 10.0,
+                "cod_razaorestricao": "CNF",
+                "cod_origemrestricao": "SIS",
+                "submercado": "NE",
+            },
+            {
+                "usina_id": usina_id,
+                "timestamp": datetime.fromisoformat("2026-03-10T10:30:00"),
+                "fonte": "Solar",
+                "energia_restringida_mwh": 20.0,
+                "cod_razaorestricao": "CNF",
+                "cod_origemrestricao": "SIS",
+                "submercado": "NE",
+            },
+            {
+                "usina_id": usina_id,
+                "timestamp": datetime.fromisoformat("2026-03-10T11:00:00"),
+                "fonte": "Solar",
+                "energia_restringida_mwh": 30.0,
+                "cod_razaorestricao": "CNF",
+                "cod_origemrestricao": "SIS",
+                "submercado": "NE",
+            },
+            {
+                "usina_id": usina_id,
+                "timestamp": datetime.fromisoformat("2026-03-10T12:00:00"),
+                "fonte": "Solar",
+                "energia_restringida_mwh": 8.0,
+                "cod_razaorestricao": "REL",
+                "cod_origemrestricao": "SIS",
+                "submercado": "NE",
+            },
+        ]
+
+    def get_pld(self, submercado: str, inicio: datetime, fim: datetime):
+        return [
+            {"timestamp": datetime.fromisoformat("2026-03-10T10:00:00"), "pld_reais_mwh": 100.0},
+            {"timestamp": datetime.fromisoformat("2026-03-10T10:30:00"), "pld_reais_mwh": 100.0},
+            {"timestamp": datetime.fromisoformat("2026-03-10T11:00:00"), "pld_reais_mwh": 100.0},
+            {"timestamp": datetime.fromisoformat("2026-03-10T12:00:00"), "pld_reais_mwh": 100.0},
+        ]
+
+
 class TestPleitoService(unittest.TestCase):
     def test_normalizar_razao_pleito_aceita_codigos_e_descricoes_ons(self):
         casos = {
@@ -54,6 +107,29 @@ class TestPleitoService(unittest.TestCase):
         self.assertIn("janela_prazo", ev)
         self.assertIn("reconciliacao", ev)
         self.assertIn("valor_pleitavel_reais", ev)
+
+    def test_listar_eventos_para_pleito_agrega_intervalos_e_expoe_status_franquia_claro(self):
+        svc = PleitoService(RepoPleitoEventizacao(mvp_only_nordeste=True), DossierAgent(FakeLLM(), model="fake"))
+        out = svc.listar_eventos_para_pleito("PISDP1", self.inicio, self.fim)
+
+        self.assertEqual(out["metadata"]["nivel_semantico_eventos"], "evento_curtailment_agregado")
+        self.assertEqual(out["metadata"]["total_intervalos_restricao"], 4)
+        self.assertEqual(out["total_eventos"], 2)
+
+        cnf = next(e for e in out["eventos"] if e["razao_classificada_ons"] == "CNF")
+        self.assertEqual(cnf["duracao_horas"], 1.5)
+        self.assertEqual(cnf["n_intervalos"], 3)
+        self.assertEqual(cnf["energia_restringida_mwh"], 60.0)
+        self.assertEqual(cnf["energia_ressarcivel_mwh"], 60.0)
+        self.assertEqual(cnf["valor_pleitavel_reais"], 6000.0)
+        self.assertEqual(cnf["status_franquia"], "nao_aplicavel_cnf_termo")
+        self.assertIn("Não consome franquia", cnf["status_franquia_label"])
+        self.assertEqual(cnf["horas_acumuladas_antes"], 0.0)
+        self.assertEqual(cnf["horas_acumuladas_depois"], 0.0)
+
+        rel = next(e for e in out["eventos"] if e["razao_classificada_ons"] == "REL")
+        self.assertEqual(rel["status_franquia"], "dentro_franquia")
+        self.assertEqual(rel["energia_ressarcivel_mwh"], 0.0)
 
     def test_gerar_pleito_por_evento_com_template_fallback(self):
         eventos = self.svc.listar_eventos_para_pleito("USI_NE_001", self.inicio, self.fim)["eventos"]

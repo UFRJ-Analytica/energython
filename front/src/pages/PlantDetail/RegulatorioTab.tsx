@@ -35,6 +35,19 @@ const motivoColor: Record<string, string> = {
   ENE: "bg-slate-500 hover:bg-slate-500",
 }
 
+const franquiaShortLabel: Record<string, string> = {
+  nao_aplicavel_cnf_termo: "Não consome franquia",
+  nao_aplicavel_ene_termo: "Não aplicável",
+  nao_aplicavel_inelegivel: "Não aplicável",
+  dentro_franquia: "Dentro da franquia",
+  acima_franquia: "Acima da franquia",
+  parcialmente_franquia: "Parcial",
+}
+
+function franquiaLabel(ev: EventoPleito) {
+  return ev.status_franquia_label || franquiaShortLabel[ev.status_franquia] || ev.status_franquia
+}
+
 function triggerDownload(fileName: string, content: string, contentType: string) {
   const blob = new Blob([content], { type: contentType })
   const url = URL.createObjectURL(blob)
@@ -125,8 +138,8 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <KpiCard title="Valor pleitável total" value={fmtBRL(data.valor_total_pleitavel_reais)} highlight="success" />
             <KpiCard title="Energia ressarcível" value={fmtMWh(data.energia_ressarcivel_total_mwh)} />
-            <KpiCard title="Eventos elegíveis" value={`${fmtNum(data.eventos_elegiveis)} / ${fmtNum(data.total_eventos)}`} />
-            <KpiCard title="Franquia usada" value={`${fmtNum(data.franquia.horas_definidas)} h`} />
+            <KpiCard title="Eventos agregados elegíveis" value={`${fmtNum(data.eventos_elegiveis)} / ${fmtNum(data.total_eventos)}`} sub={`${fmtNum(data.total_intervalos_restricao ?? 0)} intervalos de 30 min`} />
+            <KpiCard title="Franquia REL anual" value={`${fmtNum(data.franquia.horas_definidas)} h`} sub="CNF não consome esta franquia" />
           </div>
 
           <Card>
@@ -152,14 +165,14 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">Eventos acionáveis por pleito</CardTitle>
-              <p className="text-xs text-muted-foreground">Pleito agora é por evento: elegibilidade, franquia, PLD, prazo e valor são calculados antes da LLM.</p>
+              <p className="text-xs text-muted-foreground">Pleito por evento agregado de curtailment: intervalos contínuos de 30 min são agrupados por usina, motivo e origem. CNF/termo não consome franquia REL anual.</p>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead></TableHead>
-                    <TableHead>Data/hora</TableHead>
+                    <TableHead>Início/fim</TableHead>
                     <TableHead>Motivo</TableHead>
                     <TableHead>Origem</TableHead>
                     <TableHead>Energia restr.</TableHead>
@@ -175,11 +188,14 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
                   {filteredEventos.map((ev) => (
                     <TableRow key={ev.evento_id} className={ev.valor_pleitavel_reais > 0 ? "bg-emerald-50/60 dark:bg-emerald-950/20" : ""}>
                       <TableCell><Checkbox checked={selectedIds.includes(ev.evento_id)} disabled={!ev.elegivel} onCheckedChange={(v) => toggleSelected(ev.evento_id, v)} /></TableCell>
-                      <TableCell className="text-xs">{fmtDate(ev.timestamp)}</TableCell>
+                      <TableCell className="text-xs">
+                        <div>{fmtDate(ev.data_inicio || ev.timestamp)}</div>
+                        <div className="text-muted-foreground">até {fmtDate(ev.data_fim)} · {fmtNum(ev.duracao_horas)} h · {fmtNum(ev.n_intervalos ?? 1)} int.</div>
+                      </TableCell>
                       <TableCell><Badge className={motivoColor[ev.razao_classificada_ons] ?? ""}>{ev.razao_classificada_ons}</Badge></TableCell>
                       <TableCell className="text-xs">{ev.origem}</TableCell>
                       <TableCell className="text-xs">{fmtMWh(ev.energia_restringida_mwh)}</TableCell>
-                      <TableCell className="text-xs">{ev.status_franquia}</TableCell>
+                      <TableCell className="text-xs" title={ev.status_franquia}>{franquiaLabel(ev)}</TableCell>
                       <TableCell className="text-xs">{fmtMWh(ev.energia_ressarcivel_mwh)}</TableCell>
                       <TableCell className="text-xs">{fmtBRL(ev.pld_reais_mwh)}/MWh</TableCell>
                       <TableCell className="text-xs font-semibold">{ev.elegivel ? fmtBRL(ev.valor_pleitavel_reais) : "—"}</TableCell>
@@ -232,7 +248,7 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
                         <span className="font-medium">{ev.evento_id}</span>
                         <span className="font-semibold text-emerald-700">{fmtBRL(ev.valor_pleitavel_reais)}</span>
                       </div>
-                      <div className="text-muted-foreground">{canalLabel[ev.canal_recomendado] ?? ev.canal_recomendado} · {fmtMWh(ev.energia_ressarcivel_mwh)} · {ev.status_franquia}</div>
+                      <div className="text-muted-foreground">{canalLabel[ev.canal_recomendado] ?? ev.canal_recomendado} · {fmtMWh(ev.energia_ressarcivel_mwh)} · {franquiaLabel(ev)} · {fmtNum(ev.n_intervalos ?? 1)} intervalos</div>
                     </div>
                   ))}
                   {!selectedEventos.length && <p className="p-4 text-sm text-muted-foreground">Selecione eventos elegíveis na aba Eventos de Pleito.</p>}

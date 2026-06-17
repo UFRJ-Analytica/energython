@@ -11,6 +11,7 @@ from app.engine.franquia import aplicar_franquia_eventos
 from app.engine.prazos import janela_pleito
 from app.engine.reconciliacao import reconciliar_evento
 from app.engine.valoracao import valorar_evento
+from app.domain.curtailment_events import build_curtailment_intervals, group_intervals_into_events
 from app.domain.policies import FinanceiroPolicy
 from app.utils.datetime_utils import ts_hour_key
 from app.utils.document_export import markdown_to_docx_base64, markdown_to_pdf_base64
@@ -80,31 +81,57 @@ class PleitoService:
         franquia_horas, fonte_normativa_franquia = self._franquia_horas(usina.get("fonte"), ano)
 
         eventos_base: list[dict[str, Any]] = []
+        interval_rows: list[dict[str, Any]] = []
+        valor_por_intervalo: dict[str, float] = {}
         for raw in eventos_raw:
             ts = self._as_datetime(raw.get("timestamp"))
-            razao_original = raw.get("razao_restricao") or raw.get("cod_razaorestricao")
-            razao = normalizar_razao_pleito(razao_original)
-            origem = str(raw.get("origem_restricao") or "SIS").upper()
-            eleg = classificar_elegibilidade(razao, origem=origem, data_evento=ts.date())
-            duracao = self._as_float(raw.get("duracao_horas"), 1.0) or 1.0
             energia = self._as_float(raw.get("energia_restringida_mwh"))
+            pld = round(pld_map.get(ts_hour_key(ts), 0.0), 4)
+            interval_row = dict(raw)
+            interval_row["timestamp"] = ts
+            interval_row["usina_id"] = raw.get("usina_id") or usina_id
+            interval_row["fonte"] = raw.get("fonte") or usina.get("fonte")
+            interval_row["submercado"] = raw.get("submercado") or usina.get("submercado")
+            interval_rows.append(interval_row)
+            valor_por_intervalo[ts.replace(tzinfo=None).isoformat(sep=" ")] = energia * pld
+
+        intervalos = build_curtailment_intervals(
+            interval_rows,
+            perda_por_intervalo=valor_por_intervalo,
+            source_table="repo.get_constrained_off",
+            convert_limited_value_from_mwmed=False,
+        )
+        eventos_agrupados = group_intervals_into_events(intervalos)
+
+        for evento in eventos_agrupados:
+            ts = self._as_datetime(evento.inicio)
+            razao = normalizar_razao_pleito(evento.cod_razaorestricao or evento.razao_normalizada)
+            origem = str(evento.cod_origemrestricao or evento.origem_normalizada or "SIS").upper()
+            eleg = classificar_elegibilidade(razao, origem=origem, data_evento=ts.date())
+            duracao = float(evento.duracao_horas or 0.0)
+            energia = float(evento.energia_restringida_mwh or 0.0)
+            valor_intervalos = float(evento.perda_total_reais or 0.0)
+            pld_medio = valor_intervalos / energia if energia > 0 else 0.0
             eventos_base.append(
                 {
-                    "evento_id": str(raw.get("evento_id") or self._evento_id(usina_id, ts, razao)),
+                    "evento_id": evento.event_id,
                     "timestamp": ts.isoformat(),
                     "_ts": ts,
                     "data_inicio": self._data_brasilia(ts),
-                    "data_fim": self._data_brasilia(ts + timedelta(hours=duracao)),
-                    "duracao_horas": duracao,
+                    "data_fim": self._data_brasilia(self._as_datetime(evento.fim)),
+                    "duracao_horas": round(duracao, 4),
+                    "n_intervalos": evento.n_intervalos,
+                    "source_interval_ids": evento.source_interval_ids,
                     "razao_classificada_ons": razao,
-                    "razao_original": str(razao_original) if razao_original is not None else None,
+                    "razao_original": str(evento.cod_razaorestricao) if evento.cod_razaorestricao is not None else None,
                     "origem": origem,
-                    "geracao_verificada_mwh": round(self._as_float(raw.get("geracao_verificada_mwh")), 4),
-                    "geracao_referencia_ons_mwh": round(self._as_float(raw.get("geracao_referencia_mwh")), 4),
-                    "geracao_referencia_mwh": self._as_float(raw.get("geracao_referencia_mwh")),
+                    "geracao_verificada_mwh": 0.0,
+                    "geracao_referencia_ons_mwh": 0.0,
+                    "geracao_referencia_mwh": 0.0,
                     "energia_restringida_mwh": round(energia, 4),
-                    "pld_reais_mwh": round(pld_map.get(ts_hour_key(ts), 0.0), 4),
-                    "submercado": str(raw.get("submercado") or usina.get("submercado") or ""),
+                    "pld_reais_mwh": round(pld_medio, 4),
+                    "valor_intervalos_reais": round(valor_intervalos, 2),
+                    "submercado": str(usina.get("submercado") or ""),
                     "elegivel": bool(eleg.elegivel),
                     "canal_recomendado": eleg.canal_recomendado,
                     "motivo_inelegibilidade": eleg.motivo_inelegibilidade,
@@ -145,6 +172,7 @@ class PleitoService:
                 "fonte_normativa": fonte_normativa_franquia,
             },
             "total_eventos": len(eventos_out),
+            "total_intervalos_restricao": len(intervalos),
             "eventos_elegiveis": sum(1 for e in eventos_out if e.get("elegivel")),
             "valor_total_pleitavel_reais": round(valor_total, 2),
             "energia_ressarcivel_total_mwh": round(energia_total, 4),
@@ -152,6 +180,8 @@ class PleitoService:
             "metadata": {
                 "api_contract_version": "pleito_evento_v1",
                 "fonte_eventos": "constrained_off",
+                "nivel_semantico_eventos": "evento_curtailment_agregado",
+                "total_intervalos_restricao": len(intervalos),
                 "human_in_the_loop": True,
                 "llm_apenas_redacao": True,
             },

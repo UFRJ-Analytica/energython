@@ -15,6 +15,7 @@ class TestDomainContractsAndPolicies(unittest.TestCase):
                     "razao_restricao": "CNF",
                     "cod_origemrestricao": "SIS",
                     "origem_restricao": "Sistema",
+                    "geracao_limitada_mwmed": "31.8",
                 }
             ]
         )
@@ -32,6 +33,7 @@ class TestDomainContractsAndPolicies(unittest.TestCase):
         self.assertEqual(eventos[0].razao_restricao, "CNF")
         self.assertEqual(eventos[0].cod_origemrestricao, "SIS")
         self.assertEqual(eventos[0].origem_restricao, "Sistema")
+        self.assertEqual(eventos[0].geracao_limitada_mwmed, 31.8)
         self.assertEqual(len(pld), 1)
         self.assertEqual(pld[0].pld_reais_mwh, 150.0)
 

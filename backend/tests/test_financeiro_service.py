@@ -111,7 +111,7 @@ class TestFinanceiroService(unittest.TestCase):
         self.assertEqual(out["qualidade_dados"]["total_intervalos_restricao"], 3)
         self.assertEqual(out["qualidade_dados"]["total_eventos_curtailment"], 1)
         self.assertEqual(out["qualidade_dados"]["eventos_sem_origem"], 0)
-        self.assertFalse(out["qualidade_dados"]["energia_unidade_validada"])
+        self.assertTrue(out["qualidade_dados"]["energia_unidade_validada"])
         self.assertEqual(len(out["eventos"]), 1)
         self.assertEqual(out["eventos"][0]["n_intervalos"], 3)
         self.assertEqual(out["eventos"][0]["elegibilidade_status"], "ELEGIVEL")

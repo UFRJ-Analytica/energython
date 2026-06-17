@@ -8,7 +8,8 @@ import unicodedata
 
 COFF_INTERVAL_HOURS = 0.5
 COFF_VAL_GERACAOLIMITADA_UNIT = "mwmed"
-COFF_ENERGY_UNIT_VALIDATED = False
+COFF_ENERGY_UNIT_VALIDATED = True
+COFF_ENERGY_FORMULA = "max((val_geracaoreferenciafinal or val_geracaoreferencia) - val_geracao, 0) * 0.5"
 
 
 @dataclass(frozen=True)
@@ -133,11 +134,28 @@ def _timestamp_key(ts: datetime) -> str:
     return str(ts.replace(tzinfo=None))
 
 
-def _energy_from_limited_value(value: Any) -> float:
-    limited = _as_float(value)
-    if COFF_VAL_GERACAOLIMITADA_UNIT == "mwmed":
-        return limited * COFF_INTERVAL_HOURS
-    return limited
+def calculate_coff_energy_mwh(row: dict[str, Any], *, fallback_precomputed_is_mwmed: bool = False) -> tuple[float, float | None, float | None]:
+    """Return curtailed energy for ONS COFF rows.
+
+    ONS COFF fields are MWmed for each 30-minute interval. The physical cut is
+    reference generation minus verified generation, not val_geracaolimitada.
+    val_geracaolimitada is retained only as diagnostic/source metadata.
+    """
+    raw_generation = row.get("val_geracao")
+    raw_reference = row.get("val_geracaoreferenciafinal")
+    if raw_reference in (None, ""):
+        raw_reference = row.get("val_geracaoreferencia")
+
+    has_official_coff_fields = raw_generation not in (None, "") and raw_reference not in (None, "")
+    if has_official_coff_fields:
+        generation_mwmed = _as_float(raw_generation)
+        reference_mwmed = _as_float(raw_reference)
+        restricted_mwh = max(reference_mwmed - generation_mwmed, 0.0) * COFF_INTERVAL_HOURS
+        return restricted_mwh, generation_mwmed * COFF_INTERVAL_HOURS, reference_mwmed * COFF_INTERVAL_HOURS
+
+    precomputed = _as_float(row.get("energia_restringida_mwh"))
+    energy = precomputed * COFF_INTERVAL_HOURS if fallback_precomputed_is_mwmed else precomputed
+    return energy, _as_optional_float(row.get("geracao_verificada_mwh")), _as_optional_float(row.get("geracao_referencia_mwh"))
 
 
 def classify_interval_quality(energia_restringida_mwh: float, reason: str | None, origin: str | None) -> str:
@@ -166,13 +184,12 @@ def build_curtailment_intervals(
         ts = _as_datetime(row.get("timestamp"))
         reason = row.get("cod_razaorestricao") or row.get("razao_restricao")
         origin = row.get("cod_origemrestricao") or row.get("origem_restricao")
-        energia = (
-            _energy_from_limited_value(row.get("energia_restringida_mwh"))
-            if convert_limited_value_from_mwmed
-            else _as_float(row.get("energia_restringida_mwh"))
+        energia, geracao_verificada_mwh, geracao_referencia_mwh = calculate_coff_energy_mwh(
+            row,
+            fallback_precomputed_is_mwmed=convert_limited_value_from_mwmed,
         )
         quality = classify_interval_quality(energia, reason, origin)
-        if quality == "SEM_RESTRICAO":
+        if energia <= 0 or quality == "SEM_RESTRICAO":
             continue
         usina_id = str(row.get("usina_id") or "")
         tecnologia = row.get("tecnologia") or row.get("fonte")
@@ -187,8 +204,8 @@ def build_curtailment_intervals(
                 duracao_horas=COFF_INTERVAL_HOURS,
                 energia_restringida_mwh=energia,
                 perda_reais=float(perda_por_intervalo.get(_timestamp_key(ts), 0.0)),
-                geracao_verificada_mwh=_as_optional_float(row.get("geracao_verificada_mwh")),
-                geracao_referencia_mwh=_as_optional_float(row.get("geracao_referencia_mwh")),
+                geracao_verificada_mwh=geracao_verificada_mwh,
+                geracao_referencia_mwh=geracao_referencia_mwh,
                 cod_razaorestricao=str(reason) if reason is not None else None,
                 cod_origemrestricao=str(origin) if origin is not None else None,
                 razao_normalizada=normalize_reason(str(reason) if reason is not None else None),

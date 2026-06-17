@@ -17,6 +17,7 @@ class ConstrainedOffEvent:
     fonte: str | None = None
     geracao_verificada_mwh: float | None = None
     geracao_referencia_mwh: float | None = None
+    geracao_limitada_mwmed: float | None = None
     submercado: str | None = None
 
 
@@ -76,6 +77,7 @@ def parse_constrained_off(items: list[dict[str, Any]]) -> list[ConstrainedOffEve
                 fonte=e.get("fonte"),
                 geracao_verificada_mwh=_as_float(e.get("geracao_verificada_mwh")) if e.get("geracao_verificada_mwh") is not None else None,
                 geracao_referencia_mwh=_as_float(e.get("geracao_referencia_mwh")) if e.get("geracao_referencia_mwh") is not None else None,
+                geracao_limitada_mwmed=_as_float(e.get("geracao_limitada_mwmed")) if e.get("geracao_limitada_mwmed") is not None else None,
                 submercado=e.get("submercado"),
             )
         )

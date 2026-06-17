@@ -84,7 +84,51 @@ class TestCurtailmentEventsDomain(unittest.TestCase):
             with self.subTest(intervals=intervals):
                 self.assertEqual(len(group_intervals_into_events(intervals)), 2)
 
-    def test_build_intervals_classifies_and_converts_mwmed_unit(self):
+    def test_build_intervals_calculates_coff_energy_from_reference_minus_generation(self):
+        rows = [
+            {
+                "usina_id": "CJU_TESTE",
+                "timestamp": "2026-05-01T10:00:00",
+                "fonte": "fotovoltaica",
+                "val_geracao": 9.038,
+                "val_geracaolimitada": 38.0,
+                "val_geracaoreferencia": 11.313,
+                "cod_razaorestricao": "REL",
+                "cod_origemrestricao": "SIS",
+                "submercado": "NE",
+            }
+        ]
+
+        intervals = build_curtailment_intervals(rows, perda_por_intervalo={"2026-05-01 10:00:00": 123.0})
+
+        self.assertEqual(COFF_INTERVAL_HOURS, 0.5)
+        self.assertEqual(len(intervals), 1)
+        self.assertAlmostEqual(intervals[0].energia_restringida_mwh, 1.1375)
+        self.assertAlmostEqual(intervals[0].geracao_verificada_mwh, 4.519)
+        self.assertAlmostEqual(intervals[0].geracao_referencia_mwh, 5.6565)
+        self.assertEqual(intervals[0].data_quality_status, "RESTRICAO_CLASSIFICADA")
+        self.assertEqual(intervals[0].perda_reais, 123.0)
+
+    def test_build_intervals_drops_metadata_when_generation_exceeds_reference_even_if_limitada_exists(self):
+        rows = [
+            {
+                "usina_id": "CJU_TESTE",
+                "timestamp": "2026-05-01T10:00:00",
+                "fonte": "fotovoltaica",
+                "val_geracao": 23.899,
+                "val_geracaolimitada": 31.8,
+                "val_geracaoreferencia": 16.439,
+                "cod_razaorestricao": "CNF",
+                "cod_origemrestricao": "SIS",
+                "submercado": "NE",
+            }
+        ]
+
+        intervals = build_curtailment_intervals(rows)
+
+        self.assertEqual(intervals, [])
+
+    def test_build_intervals_accepts_precomputed_energy_mwh_without_conversion(self):
         self.assertEqual(COFF_VAL_GERACAOLIMITADA_UNIT, "mwmed")
         rows = [
             {
@@ -100,13 +144,10 @@ class TestCurtailmentEventsDomain(unittest.TestCase):
             }
         ]
 
-        intervals = build_curtailment_intervals(rows, perda_por_intervalo={"2026-05-01 10:00:00": 123.0})
+        intervals = build_curtailment_intervals(rows, convert_limited_value_from_mwmed=False)
 
-        self.assertEqual(COFF_INTERVAL_HOURS, 0.5)
         self.assertEqual(len(intervals), 1)
-        self.assertEqual(intervals[0].energia_restringida_mwh, 10.0)
-        self.assertEqual(intervals[0].data_quality_status, "RESTRICAO_CLASSIFICADA")
-        self.assertEqual(intervals[0].perda_reais, 123.0)
+        self.assertEqual(intervals[0].energia_restringida_mwh, 20.0)
 
     def test_regulatory_eligibility_uses_reason_and_origin(self):
         self.assertEqual(classify_regulatory_eligibility("CNF", "SIS"), "ELEGIVEL")

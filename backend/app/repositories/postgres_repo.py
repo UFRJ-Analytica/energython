@@ -176,16 +176,14 @@ class PostgresRepository(BaseRepository):
                         ELSE to_timestamp(din_instante, 'YYYY-MM-DD HH24:MI:SS')
                     END AS timestamp,
                     nom_usina AS fonte,
-                    NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision AS geracao_verificada_mwh,
-                    COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0) AS geracao_referencia_mwh,
-                    COALESCE(
-                        NULLIF(REPLACE(val_geracaolimitada::text, ',', '.'), '')::double precision,
-                        GREATEST(
-                            COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0)
-                            - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
-                            0
-                        )
+                    COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0) * 0.5 AS geracao_verificada_mwh,
+                    COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0) * 0.5 AS geracao_referencia_mwh,
+                    GREATEST(
+                        COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0)
+                        - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
+                        0
                     ) * 0.5 AS energia_restringida_mwh,
+                    NULLIF(REPLACE(val_geracaolimitada::text, ',', '.'), '')::double precision AS geracao_limitada_mwmed,
                     cod_razaorestricao AS cod_razaorestricao,
                     cod_origemrestricao AS origem_restricao,
                     NULL::text AS razao_restricao,
@@ -203,16 +201,14 @@ class PostgresRepository(BaseRepository):
                     id_ons AS usina_id,
                     din_instante::timestamp AS timestamp,
                     nom_usina AS fonte,
-                    COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0) AS geracao_verificada_mwh,
-                    COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0) AS geracao_referencia_mwh,
-                    COALESCE(
-                        NULLIF(REPLACE(val_geracaolimitada::text, ',', '.'), '')::double precision,
-                        GREATEST(
-                            COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0)
-                            - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
-                            0
-                        )
+                    COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0) * 0.5 AS geracao_verificada_mwh,
+                    COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0) * 0.5 AS geracao_referencia_mwh,
+                    GREATEST(
+                        COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0)
+                        - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
+                        0
                     ) * 0.5 AS energia_restringida_mwh,
+                    NULLIF(REPLACE(val_geracaolimitada::text, ',', '.'), '')::double precision AS geracao_limitada_mwmed,
                     cod_razaorestricao AS cod_razaorestricao,
                     cod_origemrestricao AS origem_restricao,
                     NULL::text AS razao_restricao,
@@ -225,7 +221,7 @@ class PostgresRepository(BaseRepository):
                 WHERE id_ons = :usina_id
             )
             SELECT usina_id, timestamp, fonte, geracao_verificada_mwh, geracao_referencia_mwh,
-                   energia_restringida_mwh, razao_restricao, cod_razaorestricao,
+                   energia_restringida_mwh, geracao_limitada_mwmed, razao_restricao, cod_razaorestricao,
                    origem_restricao AS cod_origemrestricao, origem_restricao, submercado
             FROM base
             WHERE timestamp BETWEEN :inicio AND :fim
@@ -494,10 +490,10 @@ class PostgresRepository(BaseRepository):
                         ELSE to_timestamp(din_instante, 'YYYY-MM-DD HH24:MI:SS')
                     END AS timestamp,
                     GREATEST(
-                        COALESCE(NULLIF(val_geracaoreferenciafinal, '')::double precision, NULLIF(val_geracaoreferencia, '')::double precision, 0)
-                        - COALESCE(NULLIF(val_geracao, '')::double precision, 0),
+                        COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0)
+                        - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
                         0
-                    ) AS energia_restringida_mwh,
+                    ) * 0.5 AS energia_restringida_mwh,
                     cod_razaorestricao,
                     CASE
                         WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('NE', 'NORDESTE') THEN 'NE'
@@ -512,10 +508,10 @@ class PostgresRepository(BaseRepository):
                 SELECT
                     din_instante::timestamp AS timestamp,
                     GREATEST(
-                        COALESCE(val_geracaoreferenciafinal, val_geracaoreferencia, 0)::double precision
-                        - COALESCE(val_geracao, 0)::double precision,
+                        COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0)
+                        - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
                         0
-                    ) AS energia_restringida_mwh,
+                    ) * 0.5 AS energia_restringida_mwh,
                     cod_razaorestricao,
                     CASE
                         WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('NE', 'NORDESTE') THEN 'NE'

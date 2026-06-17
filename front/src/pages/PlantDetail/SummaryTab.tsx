@@ -60,9 +60,9 @@ export function SummaryTab({ usinaId, inicio, fim }: Props) {
           highlight={percentualRessarcivel > 50 ? "success" : "warning"}
         />
         <KpiCard
-          title="Eventos de corte"
+          title="Eventos agregados"
           value={fmtNum(data.total_eventos_corte)}
-          sub={`Ticket médio ${fmtBRL(data.ticket_medio_evento_reais)}`}
+          sub={`${fmtNum(data.total_intervalos_restricao ?? 0)} intervalos de 30 min · ticket ${fmtBRL(data.ticket_medio_evento_reais)}`}
           icon={<Zap className="h-4 w-4 text-muted-foreground" />}
         />
         <KpiCard

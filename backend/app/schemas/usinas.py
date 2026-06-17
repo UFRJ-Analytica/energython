@@ -36,6 +36,7 @@ class UsinaResumoOut(BaseModel):
     perda_ressarcivel_reais: float
     perda_por_razao: dict[str, float]
     total_eventos_corte: int
+    total_intervalos_restricao: int = 0
     ticket_medio_evento_reais: float
     metadata: MetaOut
     perda_esperada_30d: PerdaEsperadaOut

@@ -2,6 +2,11 @@ export interface QualidadeDados {
   status: "completo" | "parcial" | "sem_pld"
   pld_faltante_eventos: number
   total_eventos: number
+  pld_faltante_intervalos?: number
+  total_eventos_curtailment?: number
+  total_intervalos_restricao?: number
+  eventos_sem_origem?: number
+  energia_unidade_validada?: boolean
 }
 
 export interface SeriePerdaItem {
@@ -10,6 +15,28 @@ export interface SeriePerdaItem {
   pld_reais_mwh: number
   perda_reais: number
   razao_restricao: string
+  cod_razaorestricao?: string | null
+  cod_origemrestricao?: string | null
+  nivel_semantico?: string | null
+}
+
+export interface EventoCurtailmentItem {
+  event_id: string
+  usina_id: string
+  inicio: string
+  fim: string
+  duracao_horas: number
+  n_intervalos: number
+  energia_restringida_mwh: number
+  perda_total_reais: number
+  cod_razaorestricao?: string | null
+  cod_origemrestricao?: string | null
+  razao_normalizada?: string | null
+  origem_normalizada?: string | null
+  elegibilidade_status: string
+  evidence_score: number
+  source_interval_ids: string[]
+  gap_detectado?: boolean
 }
 
 export interface PerdaOut {
@@ -18,6 +45,7 @@ export interface PerdaOut {
   total_energia_restringida_mwh: number
   por_razao: Record<string, number>
   qualidade_dados: QualidadeDados
+  eventos?: EventoCurtailmentItem[]
   serie: SeriePerdaItem[]
 }
 

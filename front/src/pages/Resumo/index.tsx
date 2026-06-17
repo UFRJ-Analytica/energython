@@ -121,7 +121,8 @@ export default function Resumo() {
           <div className="flex flex-wrap justify-center gap-6 border-t border-border/40 pt-6 text-center">
             {[
               { label: "Energia cortada", value: fmtMWh(data.total_corte_mwh) },
-              { label: "Eventos de corte", value: fmtNum(data.total_eventos_corte) },
+              { label: "Eventos agregados", value: fmtNum(data.total_eventos_corte) },
+              { label: "Intervalos de restrição", value: fmtNum(data.total_intervalos_restricao ?? 0) },
               { label: "Ticket médio", value: fmtBRL(data.ticket_medio_evento_reais) },
             ].map((item) => (
               <div key={item.label}>

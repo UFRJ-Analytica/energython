@@ -9,12 +9,39 @@ class PerdaSerieItem(BaseModel):
     pld_reais_mwh: float
     perda_reais: float
     razao_restricao: str
+    cod_razaorestricao: str | None = None
+    cod_origemrestricao: str | None = None
+    nivel_semantico: str | None = None
+
+
+class PerdaEventoItem(BaseModel):
+    event_id: str
+    usina_id: str
+    inicio: str
+    fim: str
+    duracao_horas: float
+    n_intervalos: int
+    energia_restringida_mwh: float
+    perda_total_reais: float
+    cod_razaorestricao: str | None = None
+    cod_origemrestricao: str | None = None
+    razao_normalizada: str | None = None
+    origem_normalizada: str | None = None
+    elegibilidade_status: str
+    evidence_score: int
+    source_interval_ids: list[str]
+    gap_detectado: bool = False
 
 
 class QualidadeDadosPerda(BaseModel):
     status: str
     pld_faltante_eventos: int
     total_eventos: int
+    pld_faltante_intervalos: int = 0
+    total_eventos_curtailment: int = 0
+    total_intervalos_restricao: int = 0
+    eventos_sem_origem: int = 0
+    energia_unidade_validada: bool = False
 
 
 class PerdaOut(BaseModel):
@@ -25,6 +52,7 @@ class PerdaOut(BaseModel):
     qualidade_dados: QualidadeDadosPerda
     metadata: MetaOut
     paginacao_serie: PaginationOut
+    eventos: list[PerdaEventoItem] = []
     serie: list[PerdaSerieItem]
 
 

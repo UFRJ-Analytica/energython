@@ -25,11 +25,14 @@ class MockRepository(BaseRepository):
             self.geracao = [g for g in self.geracao if g.get("usina_id") in usinas_ne]
             self.clima = [c for c in self.clima if c.get("usina_id") in usinas_ne]
 
-        self.usinas = filter_top_50_usinas(self.usinas)
-        top_ids = {u.get("usina_id") for u in self.usinas}
-        self.co = [e for e in self.co if e.get("usina_id") in top_ids]
-        self.geracao = [g for g in self.geracao if g.get("usina_id") in top_ids]
-        self.clima = [c for c in self.clima if c.get("usina_id") in top_ids]
+        top_ids = {u.get("usina_id") for u in self.usinas if is_top_50_usina(str(u.get("usina_id")))}
+        if top_ids:
+            self.usinas = [u for u in self.usinas if u.get("usina_id") in top_ids]
+            self.co = [e for e in self.co if e.get("usina_id") in top_ids]
+            self.geracao = [g for g in self.geracao if g.get("usina_id") in top_ids]
+            self.clima = [c for c in self.clima if c.get("usina_id") in top_ids]
+        else:
+            top_ids = {u.get("usina_id") for u in self.usinas}
 
     def _load_csv(self, path: Path, datetime_cols: set[str] | None = None):
         datetime_cols = datetime_cols or set()
@@ -69,7 +72,7 @@ class MockRepository(BaseRepository):
         return data
 
     def get_usina(self, usina_id: str):
-        if not is_top_50_usina(usina_id):
+        if not is_top_50_usina(usina_id) and not any(u.get("usina_id") == usina_id for u in self.usinas):
             return None
         for u in self.usinas:
             if u.get("usina_id") == usina_id:

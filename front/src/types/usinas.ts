@@ -30,6 +30,7 @@ export interface UsinaResumoOut {
   perda_ressarcivel_reais: number
   perda_por_razao: Record<string, number>
   total_eventos_corte: number
+  total_intervalos_restricao?: number
   ticket_medio_evento_reais: number
   perda_esperada_30d: {
     valor_reais: number

@@ -102,7 +102,13 @@ def resumo_usina(
     total_perda = perda["total_perda_reais"]
     total_eventos = int(
         perda.get("total_eventos")
+        or perda.get("qualidade_dados", {}).get("total_eventos_curtailment")
         or perda.get("qualidade_dados", {}).get("total_eventos")
+        or len(perda.get("eventos") or [])
+        or 0
+    )
+    total_intervalos = int(
+        perda.get("qualidade_dados", {}).get("total_intervalos_restricao")
         or len(perda.get("serie") or [])
         or 0
     )
@@ -133,6 +139,7 @@ def resumo_usina(
         "perda_ressarcivel_reais": round(perda_ressarcivel, 2),
         "perda_por_razao": {str(k): round(float(v or 0.0), 2) for k, v in (perda.get("por_razao") or {}).items()},
         "total_eventos_corte": total_eventos,
+        "total_intervalos_restricao": total_intervalos,
         "ticket_medio_evento_reais": round(ticket_medio, 2),
         "metadata": {
             "mvp_scope_applied": True,

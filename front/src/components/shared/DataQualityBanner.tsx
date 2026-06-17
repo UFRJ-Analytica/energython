@@ -21,7 +21,7 @@ export function DataQualityBanner({ qualidade }: Props) {
       <div className="flex items-center gap-2">
         {icons[qualidade.status]}
         <AlertDescription>
-          {QUALIDADE_LABELS[qualidade.status]} — {qualidade.pld_faltante_eventos} de {qualidade.total_eventos} eventos sem
+          {QUALIDADE_LABELS[qualidade.status]} — {qualidade.pld_faltante_intervalos ?? qualidade.pld_faltante_eventos} de {qualidade.total_intervalos_restricao ?? qualidade.total_eventos} intervalos sem
           PLD
         </AlertDescription>
       </div>

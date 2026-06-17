@@ -4,6 +4,11 @@ from datetime import datetime, timedelta, timezone
 import unicodedata
 
 from app.domain.contracts import parse_constrained_off, parse_pld
+from app.domain.curtailment_events import (
+    COFF_ENERGY_UNIT_VALIDATED,
+    build_curtailment_intervals,
+    group_intervals_into_events,
+)
 from app.domain.policies import FinanceiroPolicy
 from app.services.forecasting_utils import build_historical_vs_forecast_losses, forecast_future_losses
 from app.utils.datetime_utils import ts_keys
@@ -30,7 +35,16 @@ class FinanceiroService:
         return inicio_h.isoformat(), fim_h.isoformat()
 
     @staticmethod
-    def _fallback_razao(evento) -> str:
+    def _fechar_total_arredondado(items: list[dict], field: str, total: float, decimals: int) -> None:
+        if not items:
+            return
+        total_round = round(float(total or 0.0), decimals)
+        soma = round(sum(float(item.get(field) or 0.0) for item in items), decimals)
+        ajuste = round(total_round - soma, decimals)
+        if ajuste:
+            items[-1][field] = round(float(items[-1].get(field) or 0.0) + ajuste, decimals)
+
+    def _fallback_razao(self, evento) -> str:
         razao = (evento.razao_restricao or "").strip().lower()
         if razao:
             return razao
@@ -90,7 +104,9 @@ class FinanceiroService:
         por_razao: dict[str, float] = {}
         total_perda = 0.0
         total_energia = 0.0
-        pld_faltante_eventos = 0
+        pld_faltante_intervalos = 0
+        perda_por_intervalo: dict[str, float] = {}
+        rows_intervalos: list[dict] = []
 
         for e in eventos:
             ts = str(e.timestamp)
@@ -100,13 +116,29 @@ class FinanceiroService:
             if preco is None:
                 preco = pld_map_hora.get(ts_hora)
             if preco is None:
-                pld_faltante_eventos += 1
+                pld_faltante_intervalos += 1
                 preco = 0.0
             perda = energia * preco
             razao = self._fallback_razao(e)
             total_perda += perda
             total_energia += energia
             por_razao[razao] = por_razao.get(razao, 0.0) + perda
+            perda_por_intervalo[ts] = perda
+            rows_intervalos.append(
+                {
+                    "usina_id": e.usina_id or usina_id,
+                    "timestamp": e.timestamp,
+                    "fonte": e.fonte,
+                    "energia_restringida_mwh": energia,
+                    "geracao_verificada_mwh": e.geracao_verificada_mwh,
+                    "geracao_referencia_mwh": e.geracao_referencia_mwh,
+                    "cod_razaorestricao": e.cod_razaorestricao or e.razao_restricao,
+                    "cod_origemrestricao": e.cod_origemrestricao,
+                    "razao_restricao": e.razao_restricao,
+                    "origem_restricao": e.origem_restricao,
+                    "submercado": e.submercado or usina.get("submercado"),
+                }
+            )
             serie.append(
                 {
                     "timestamp": ts,
@@ -114,21 +146,61 @@ class FinanceiroService:
                     "pld_reais_mwh": round(preco, 4),
                     "perda_reais": round(perda, 2),
                     "razao_restricao": razao,
+                    "cod_razaorestricao": e.cod_razaorestricao,
+                    "cod_origemrestricao": e.cod_origemrestricao,
+                    "nivel_semantico": "intervalo_restricao",
                 }
             )
 
+        intervalos = build_curtailment_intervals(
+            rows_intervalos,
+            perda_por_intervalo=perda_por_intervalo,
+            source_table="repo.get_constrained_off",
+            convert_limited_value_from_mwmed=False,
+        )
+        eventos_curtailment = group_intervals_into_events(intervalos)
+        total_eventos_curtailment = len(eventos_curtailment)
+        eventos_sem_origem = sum(1 for ev in eventos_curtailment if not ev.origem_normalizada)
+
         status = self.policy.classificar_status_qualidade_perda(
-            pld_faltante_eventos=pld_faltante_eventos,
+            pld_faltante_eventos=pld_faltante_intervalos,
             total_pld_rows=len(pld),
         )
+
+        eventos_payload = [
+            {
+                "event_id": ev.event_id,
+                "usina_id": ev.usina_id,
+                "inicio": ev.inicio.isoformat(),
+                "fim": ev.fim.isoformat(),
+                "duracao_horas": round(ev.duracao_horas, 4),
+                "n_intervalos": ev.n_intervalos,
+                "energia_restringida_mwh": round(ev.energia_restringida_mwh, 4),
+                "perda_total_reais": round(ev.perda_total_reais, 2),
+                "cod_razaorestricao": ev.cod_razaorestricao,
+                "cod_origemrestricao": ev.cod_origemrestricao,
+                "razao_normalizada": ev.razao_normalizada,
+                "origem_normalizada": ev.origem_normalizada,
+                "elegibilidade_status": ev.elegibilidade_status,
+                "evidence_score": ev.evidence_score,
+                "source_interval_ids": ev.source_interval_ids,
+                "gap_detectado": ev.gap_detectado,
+            }
+            for ev in eventos_curtailment
+        ]
+        self._fechar_total_arredondado(serie, "energia_restringida_mwh", total_energia, 4)
+        self._fechar_total_arredondado(serie, "perda_reais", total_perda, 2)
+        self._fechar_total_arredondado(eventos_payload, "energia_restringida_mwh", total_energia, 4)
+        self._fechar_total_arredondado(eventos_payload, "perda_total_reais", total_perda, 2)
 
         log_json(
             "financeiro.calcular_perda",
             usina_id=usina_id,
-            total_eventos=len(eventos),
+            total_intervalos_restricao=len(eventos),
+            total_eventos_curtailment=total_eventos_curtailment,
             total_perda_reais=round(total_perda, 2),
             total_energia_mwh=round(total_energia, 4),
-            pld_faltante_eventos=pld_faltante_eventos,
+            pld_faltante_intervalos=pld_faltante_intervalos,
             qualidade_status=status,
         )
 
@@ -139,15 +211,23 @@ class FinanceiroService:
             "por_razao": {k: round(v, 2) for k, v in por_razao.items()},
             "qualidade_dados": {
                 "status": status,
-                "pld_faltante_eventos": pld_faltante_eventos,
-                "total_eventos": len(eventos),
+                "pld_faltante_eventos": pld_faltante_intervalos,
+                "pld_faltante_intervalos": pld_faltante_intervalos,
+                "total_eventos": total_eventos_curtailment,
+                "total_eventos_curtailment": total_eventos_curtailment,
+                "total_intervalos_restricao": len(intervalos),
+                "eventos_sem_origem": eventos_sem_origem,
+                "energia_unidade_validada": COFF_ENERGY_UNIT_VALIDATED,
             },
             "metadata": {
                 "mvp_scope_applied": True,
                 "mvp_scope": "geradoras_renovaveis_submercado_ne",
                 "api_contract_version": "v1",
                 "data_quality_status": status,
+                "nivel_semantico_serie": "intervalo_restricao",
+                "nivel_semantico_eventos": "evento_curtailment_agregado",
             },
+            "eventos": eventos_payload,
             "serie": serie,
         }
         if self.cache:
@@ -186,56 +266,22 @@ class FinanceiroService:
             if cached is not None:
                 return cached
 
-        usina = self.repo.get_usina(usina_id)
-        if not usina:
-            raise ValueError("usina_nao_encontrada")
-
-        agg = self.repo.get_perda_resumida(usina_id=usina_id, submercado=usina["submercado"], inicio=inicio, fim=fim)
-        if agg is None:
-            full = self.calcular_perda(usina_id, inicio, fim)
-            por_razao = self._aplicar_fallback_por_razao_para_usina(
-                usina_id=usina_id,
-                total_perda_reais=float(full["total_perda_reais"]),
-                por_razao=dict(full.get("por_razao") or {}),
-            )
-            out = {
-                "usina_id": usina_id,
-                "total_perda_reais": float(full["total_perda_reais"]),
-                "total_energia_restringida_mwh": float(full["total_energia_restringida_mwh"]),
-                "por_razao": por_razao,
-                "qualidade_dados": dict(full.get("qualidade_dados") or {}),
-                "metadata": dict(full.get("metadata") or {}),
-                "total_eventos": int((full.get("qualidade_dados") or {}).get("total_eventos", len(full.get("serie") or []))),
-            }
-            if self.cache:
-                self.cache.set(cache_key, out)
-            return out
-
-        status = self.policy.classificar_status_qualidade_perda(
-            pld_faltante_eventos=int(agg.get("pld_faltante_eventos") or 0),
-            total_pld_rows=int(agg.get("total_eventos") or 0),
+        full = self.calcular_perda(usina_id, inicio, fim)
+        por_razao = self._aplicar_fallback_por_razao_para_usina(
+            usina_id=usina_id,
+            total_perda_reais=float(full["total_perda_reais"]),
+            por_razao=dict(full.get("por_razao") or {}),
         )
+        qualidade = dict(full.get("qualidade_dados") or {})
         out = {
             "usina_id": usina_id,
-            "total_perda_reais": round(float(agg.get("total_perda_reais") or 0.0), 2),
-            "total_energia_restringida_mwh": round(float(agg.get("total_energia_restringida_mwh") or 0.0), 4),
-            "por_razao": self._aplicar_fallback_por_razao_para_usina(
-                usina_id=usina_id,
-                total_perda_reais=float(agg.get("total_perda_reais") or 0.0),
-                por_razao={str(k): round(float(v or 0.0), 2) for k, v in (agg.get("por_razao") or {}).items()},
-            ),
-            "qualidade_dados": {
-                "status": status,
-                "pld_faltante_eventos": int(agg.get("pld_faltante_eventos") or 0),
-                "total_eventos": int(agg.get("total_eventos") or 0),
-            },
-            "metadata": {
-                "mvp_scope_applied": True,
-                "mvp_scope": "geradoras_renovaveis_submercado_ne",
-                "api_contract_version": "v1",
-                "data_quality_status": status,
-            },
-            "total_eventos": int(agg.get("total_eventos") or 0),
+            "total_perda_reais": float(full["total_perda_reais"]),
+            "total_energia_restringida_mwh": float(full["total_energia_restringida_mwh"]),
+            "por_razao": por_razao,
+            "qualidade_dados": qualidade,
+            "metadata": dict(full.get("metadata") or {}),
+            "total_eventos": int(qualidade.get("total_eventos_curtailment", qualidade.get("total_eventos", 0)) or 0),
+            "total_intervalos_restricao": int(qualidade.get("total_intervalos_restricao", len(full.get("serie") or [])) or 0),
         }
         if self.cache:
             self.cache.set(cache_key, out)

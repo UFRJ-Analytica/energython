@@ -185,7 +185,7 @@ class PostgresRepository(BaseRepository):
                             - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
                             0
                         )
-                    ) AS energia_restringida_mwh,
+                    ) * 0.5 AS energia_restringida_mwh,
                     cod_razaorestricao AS cod_razaorestricao,
                     cod_origemrestricao AS origem_restricao,
                     NULL::text AS razao_restricao,
@@ -212,7 +212,7 @@ class PostgresRepository(BaseRepository):
                             - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
                             0
                         )
-                    ) AS energia_restringida_mwh,
+                    ) * 0.5 AS energia_restringida_mwh,
                     cod_razaorestricao AS cod_razaorestricao,
                     cod_origemrestricao AS origem_restricao,
                     NULL::text AS razao_restricao,
@@ -225,7 +225,8 @@ class PostgresRepository(BaseRepository):
                 WHERE id_ons = :usina_id
             )
             SELECT usina_id, timestamp, fonte, geracao_verificada_mwh, geracao_referencia_mwh,
-                   energia_restringida_mwh, razao_restricao, cod_razaorestricao, origem_restricao, submercado
+                   energia_restringida_mwh, razao_restricao, cod_razaorestricao,
+                   origem_restricao AS cod_origemrestricao, origem_restricao, submercado
             FROM base
             WHERE timestamp BETWEEN :inicio AND :fim
               AND cod_razaorestricao IS NOT NULL
@@ -250,6 +251,8 @@ class PostgresRepository(BaseRepository):
                 GREATEST(COALESCE(val_geracaoprogramada,0) - COALESCE(val_geracaoverificada,0), 0) AS energia_restringida_mwh,
                 NULL::text AS razao_restricao,
                 NULL::text AS cod_razaorestricao,
+                NULL::text AS cod_origemrestricao,
+                NULL::text AS origem_restricao,
                 CASE
                     WHEN UPPER(nom_subsistema) = 'NORDESTE' THEN 'NE'
                     WHEN UPPER(nom_subsistema) = 'NORTE' THEN 'N'

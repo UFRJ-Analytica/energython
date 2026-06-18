@@ -70,7 +70,7 @@ export default function Resumo() {
               <HeroNumber value={data.total_perda_reais} />
             </div>
             <p className="text-sm text-muted-foreground">
-              em energia cortada que esta usina não foi paga para gerar
+              perda de oportunidade de geração de receita decorrente de eventos de curtailment
             </p>
           </div>
 
@@ -120,7 +120,7 @@ export default function Resumo() {
           {/* Contexto secundário */}
           <div className="flex flex-wrap justify-center gap-6 border-t border-border/40 pt-6 text-center">
             {[
-              { label: "Energia cortada", value: fmtMWh(data.total_corte_mwh) },
+              { label: "Energia restringida", value: fmtMWh(data.total_corte_mwh) },
               { label: "Eventos agregados", value: fmtNum(data.total_eventos_corte) },
               { label: "Intervalos de restrição", value: fmtNum(data.total_intervalos_restricao ?? 0) },
               { label: "Ticket médio", value: fmtBRL(data.ticket_medio_evento_reais) },

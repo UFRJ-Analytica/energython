@@ -18,6 +18,8 @@ class ConstrainedOffEvent:
     geracao_verificada_mwh: float | None = None
     geracao_referencia_mwh: float | None = None
     geracao_limitada_mwmed: float | None = None
+    referencia_oficial: bool | None = None
+    referencia_calculo_curtailment: str | None = None
     submercado: str | None = None
 
 
@@ -62,6 +64,19 @@ def _as_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _as_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    token = str(value).strip().lower()
+    if token in {"true", "t", "1", "yes", "sim"}:
+        return True
+    if token in {"false", "f", "0", "no", "nao", "não"}:
+        return False
+    return bool(value)
+
+
 def parse_constrained_off(items: list[dict[str, Any]]) -> list[ConstrainedOffEvent]:
     out: list[ConstrainedOffEvent] = []
     for e in items:
@@ -78,6 +93,8 @@ def parse_constrained_off(items: list[dict[str, Any]]) -> list[ConstrainedOffEve
                 geracao_verificada_mwh=_as_float(e.get("geracao_verificada_mwh")) if e.get("geracao_verificada_mwh") is not None else None,
                 geracao_referencia_mwh=_as_float(e.get("geracao_referencia_mwh")) if e.get("geracao_referencia_mwh") is not None else None,
                 geracao_limitada_mwmed=_as_float(e.get("geracao_limitada_mwmed")) if e.get("geracao_limitada_mwmed") is not None else None,
+                referencia_oficial=_as_bool(e.get("referencia_oficial")),
+                referencia_calculo_curtailment=e.get("referencia_calculo_curtailment"),
                 submercado=e.get("submercado"),
             )
         )

@@ -80,6 +80,7 @@ export interface EventoPleito {
   energia_restringida_mwh: number
   pld_reais_mwh: number
   valor_intervalos_reais?: number | null
+  valor_perda_oportunidade_reais?: number | null
   submercado: string
   elegivel: boolean
   canal_recomendado: "PROTOCOLO_ONS" | "TERMO_COMPROMISSO_LEI_15269" | "NENHUM" | string

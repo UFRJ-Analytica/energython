@@ -183,6 +183,11 @@ class PostgresRepository(BaseRepository):
                         - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
                         0
                     ) * 0.5 AS energia_restringida_mwh,
+                    (NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '') IS NOT NULL) AS referencia_oficial,
+                    CASE
+                        WHEN NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '') IS NOT NULL THEN 'geracao_referencia_final_mpo_5_13'
+                        ELSE 'geracao_referencia_estimativa_fallback'
+                    END AS referencia_calculo_curtailment,
                     NULLIF(REPLACE(val_geracaolimitada::text, ',', '.'), '')::double precision AS geracao_limitada_mwmed,
                     cod_razaorestricao AS cod_razaorestricao,
                     cod_origemrestricao AS origem_restricao,
@@ -208,6 +213,11 @@ class PostgresRepository(BaseRepository):
                         - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
                         0
                     ) * 0.5 AS energia_restringida_mwh,
+                    (NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '') IS NOT NULL) AS referencia_oficial,
+                    CASE
+                        WHEN NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '') IS NOT NULL THEN 'geracao_referencia_final_mpo_5_13'
+                        ELSE 'geracao_referencia_estimativa_fallback'
+                    END AS referencia_calculo_curtailment,
                     NULLIF(REPLACE(val_geracaolimitada::text, ',', '.'), '')::double precision AS geracao_limitada_mwmed,
                     cod_razaorestricao AS cod_razaorestricao,
                     cod_origemrestricao AS origem_restricao,
@@ -221,7 +231,8 @@ class PostgresRepository(BaseRepository):
                 WHERE id_ons = :usina_id
             )
             SELECT usina_id, timestamp, fonte, geracao_verificada_mwh, geracao_referencia_mwh,
-                   energia_restringida_mwh, geracao_limitada_mwmed, razao_restricao, cod_razaorestricao,
+                   energia_restringida_mwh, referencia_oficial, referencia_calculo_curtailment,
+                   geracao_limitada_mwmed, razao_restricao, cod_razaorestricao,
                    origem_restricao AS cod_origemrestricao, origem_restricao, submercado
             FROM base
             WHERE timestamp BETWEEN :inicio AND :fim
@@ -245,6 +256,8 @@ class PostgresRepository(BaseRepository):
                 val_geracaoverificada AS geracao_verificada_mwh,
                 val_geracaoprogramada AS geracao_referencia_mwh,
                 GREATEST(COALESCE(val_geracaoprogramada,0) - COALESCE(val_geracaoverificada,0), 0) AS energia_restringida_mwh,
+                false AS referencia_oficial,
+                'geracao_programada_menos_verificada_legacy_fallback'::text AS referencia_calculo_curtailment,
                 NULL::text AS razao_restricao,
                 NULL::text AS cod_razaorestricao,
                 NULL::text AS cod_origemrestricao,

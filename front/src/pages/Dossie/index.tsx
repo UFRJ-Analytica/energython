@@ -50,6 +50,14 @@ function triggerDownload(fileName: string, content: string, contentType: string,
   URL.revokeObjectURL(url)
 }
 
+function valorPerdaOportunidade(ev: EventoPleito) {
+  return ev.valor_perda_oportunidade_reais ?? ev.valor_intervalos_reais ?? ev.energia_restringida_mwh * ev.pld_reais_mwh
+}
+
+function franquiaLabel(ev: EventoPleito) {
+  return ev.status_franquia_label || ev.status_franquia
+}
+
 export default function Dossie() {
   const { id } = useParams<{ id: string }>()
   const usina = useUsina(id!)
@@ -254,7 +262,7 @@ export default function Dossie() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">Eventos de Pleito</CardTitle>
-              <p className="text-xs text-muted-foreground">Elegibilidade, franquia, PLD, prazo e canal são calculados antes da redação por IA.</p>
+              <p className="text-xs text-muted-foreground">Elegibilidade, franquia, PLD, prazo e canal são calculados antes da redação por IA. “Perda oportun.” mostra a perda de oportunidade de geração de receita; “Valor pleitável” pode zerar se REL ainda estiver dentro da franquia anual.</p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -279,7 +287,8 @@ export default function Dossie() {
                       <TableHead>Franquia</TableHead>
                       <TableHead>Ressarcível</TableHead>
                       <TableHead>PLD</TableHead>
-                      <TableHead>Valor</TableHead>
+                      <TableHead>Perda oportun.</TableHead>
+                      <TableHead>Valor pleitável</TableHead>
                       <TableHead>Prazo</TableHead>
                       <TableHead>Ação</TableHead>
                     </TableRow>
@@ -292,10 +301,20 @@ export default function Dossie() {
                         <TableCell><Badge className={motivoColor[ev.razao_classificada_ons] ?? ""}>{ev.razao_classificada_ons}</Badge></TableCell>
                         <TableCell className="text-xs">{ev.origem}</TableCell>
                         <TableCell className="text-xs">{fmtMWh(ev.energia_restringida_mwh)}</TableCell>
-                        <TableCell className="text-xs">{ev.status_franquia}</TableCell>
+                        <TableCell className="text-xs" title={ev.status_franquia}>{franquiaLabel(ev)}</TableCell>
                         <TableCell className="text-xs">{fmtMWh(ev.energia_ressarcivel_mwh)}</TableCell>
                         <TableCell className="text-xs">{fmtBRL(ev.pld_reais_mwh)}/MWh</TableCell>
-                        <TableCell className="text-xs font-semibold">{ev.elegivel ? fmtBRL(ev.valor_pleitavel_reais) : "—"}</TableCell>
+                        <TableCell className="text-xs">{fmtBRL(valorPerdaOportunidade(ev))}</TableCell>
+                        <TableCell className="text-xs font-semibold">
+                          {ev.elegivel ? (
+                            <div>
+                              <div>{fmtBRL(ev.valor_pleitavel_reais)}</div>
+                              {ev.valor_pleitavel_reais === 0 && ev.status_franquia === "dentro_franquia" && (
+                                <div className="text-[10px] font-normal text-muted-foreground">zerado pela franquia REL</div>
+                              )}
+                            </div>
+                          ) : "—"}
+                        </TableCell>
                         <TableCell>
                           <Badge variant={ev.janela_prazo.dias_restantes_protocolo_ons <= 7 ? "destructive" : "secondary"}>
                             {ev.janela_prazo.elegivel_termo ? "Termo" : `${ev.janela_prazo.dias_restantes_protocolo_ons}d`}
@@ -309,7 +328,7 @@ export default function Dossie() {
                       </TableRow>
                     ))}
                     {filteredEventos.length === 0 && (
-                      <TableRow><TableCell colSpan={11} className="py-6 text-center text-sm text-muted-foreground">Nenhum evento encontrado.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={12} className="py-6 text-center text-sm text-muted-foreground">Nenhum evento encontrado.</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -325,7 +344,7 @@ export default function Dossie() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <KpiCard title="Eventos" value={`${selectedEventos.length}`} />
-                <KpiCard title="Valor" value={fmtBRL(selectedTotal)} highlight="success" />
+                <KpiCard title="Valor pleitável" value={fmtBRL(selectedTotal)} highlight="success" />
                 <KpiCard title="Energia" value={fmtMWh(selectedEnergia)} />
               </div>
               {canalMixed && <Badge variant="destructive">Há canais mistos selecionados; gere pleitos separados por canal.</Badge>}
@@ -343,7 +362,7 @@ export default function Dossie() {
                       <span className="font-medium">{ev.evento_id}</span>
                       <span className="font-semibold text-emerald-700">{fmtBRL(ev.valor_pleitavel_reais)}</span>
                     </div>
-                    <div className="text-muted-foreground">{canalLabel[ev.canal_recomendado] ?? ev.canal_recomendado} · {fmtMWh(ev.energia_ressarcivel_mwh)} · {ev.status_franquia}</div>
+                    <div className="text-muted-foreground">{canalLabel[ev.canal_recomendado] ?? ev.canal_recomendado} · {fmtMWh(ev.energia_ressarcivel_mwh)} · {franquiaLabel(ev)}</div>
                   </div>
                 ))}
                 {!selectedEventos.length && <p className="p-4 text-sm text-muted-foreground">Selecione eventos elegíveis acima.</p>}

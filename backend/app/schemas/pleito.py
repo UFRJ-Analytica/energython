@@ -41,6 +41,7 @@ class EventoPleitoOut(BaseModel):
     energia_restringida_mwh: float
     pld_reais_mwh: float
     valor_intervalos_reais: float | None = None
+    valor_perda_oportunidade_reais: float | None = None
     submercado: str
     elegivel: bool
     canal_recomendado: str

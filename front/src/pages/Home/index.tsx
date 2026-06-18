@@ -83,7 +83,7 @@ export default function Home() {
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                     <Zap className="mb-5 h-5 w-5 text-amber-300" />
                     <p className="text-sm font-medium text-white">BESS</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">Simulações de captura de energia cortada.</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">Simulações de captura de energia restringida por curtailment.</p>
                   </div>
                 </div>
               </div>

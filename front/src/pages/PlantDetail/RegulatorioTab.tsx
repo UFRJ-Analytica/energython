@@ -48,6 +48,10 @@ function franquiaLabel(ev: EventoPleito) {
   return ev.status_franquia_label || franquiaShortLabel[ev.status_franquia] || ev.status_franquia
 }
 
+function valorPerdaOportunidade(ev: EventoPleito) {
+  return ev.valor_perda_oportunidade_reais ?? ev.valor_intervalos_reais ?? ev.energia_restringida_mwh * ev.pld_reais_mwh
+}
+
 function triggerDownload(fileName: string, content: string, contentType: string) {
   const blob = new Blob([content], { type: contentType })
   const url = URL.createObjectURL(blob)
@@ -165,7 +169,7 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">Eventos acionáveis por pleito</CardTitle>
-              <p className="text-xs text-muted-foreground">Pleito por evento agregado de curtailment: intervalos contínuos de 30 min são agrupados por usina, motivo e origem. CNF/termo não consome franquia REL anual.</p>
+              <p className="text-xs text-muted-foreground">Pleito por evento agregado de curtailment: intervalos contínuos de 30 min são agrupados por usina, motivo e origem. “Perda oportun.” é a perda de oportunidade de geração de receita; “Valor pleitável” pode zerar quando REL ainda está dentro da franquia anual. CNF/termo não consome franquia REL anual.</p>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -179,7 +183,8 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
                     <TableHead>Franquia</TableHead>
                     <TableHead>Ressarcível</TableHead>
                     <TableHead>PLD</TableHead>
-                    <TableHead>Valor</TableHead>
+                    <TableHead>Perda oportun.</TableHead>
+                    <TableHead>Valor pleitável</TableHead>
                     <TableHead>Prazo</TableHead>
                     <TableHead>Ação</TableHead>
                   </TableRow>
@@ -198,7 +203,17 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
                       <TableCell className="text-xs" title={ev.status_franquia}>{franquiaLabel(ev)}</TableCell>
                       <TableCell className="text-xs">{fmtMWh(ev.energia_ressarcivel_mwh)}</TableCell>
                       <TableCell className="text-xs">{fmtBRL(ev.pld_reais_mwh)}/MWh</TableCell>
-                      <TableCell className="text-xs font-semibold">{ev.elegivel ? fmtBRL(ev.valor_pleitavel_reais) : "—"}</TableCell>
+                      <TableCell className="text-xs">{fmtBRL(valorPerdaOportunidade(ev))}</TableCell>
+                      <TableCell className="text-xs font-semibold">
+                        {ev.elegivel ? (
+                          <div>
+                            <div>{fmtBRL(ev.valor_pleitavel_reais)}</div>
+                            {ev.valor_pleitavel_reais === 0 && ev.status_franquia === "dentro_franquia" && (
+                              <div className="text-[10px] font-normal text-muted-foreground">zerado pela franquia REL</div>
+                            )}
+                          </div>
+                        ) : "—"}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={ev.janela_prazo.dias_restantes_protocolo_ons <= 7 ? "destructive" : "secondary"}>
                           {ev.janela_prazo.elegivel_termo ? "Termo" : `${ev.janela_prazo.dias_restantes_protocolo_ons}d`}
@@ -212,7 +227,7 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
                     </TableRow>
                   ))}
                   {filteredEventos.length === 0 && (
-                    <TableRow><TableCell colSpan={11} className="py-6 text-center text-sm text-muted-foreground">Nenhum evento encontrado.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={12} className="py-6 text-center text-sm text-muted-foreground">Nenhum evento encontrado.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -223,7 +238,7 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
         <TabsContent value="dossie" className="space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <KpiCard title="Pleitos selecionados" value={`${selectedEventos.length} eventos`} />
-            <KpiCard title="Valor potencial selecionado" value={fmtBRL(selectedTotal)} highlight="success" />
+            <KpiCard title="Valor pleitável selecionado" value={fmtBRL(selectedTotal)} highlight="success" />
             <KpiCard title="Energia selecionada" value={fmtMWh(selectedEnergia)} />
           </div>
 

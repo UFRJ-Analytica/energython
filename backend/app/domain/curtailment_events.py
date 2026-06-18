@@ -10,6 +10,9 @@ COFF_INTERVAL_HOURS = 0.5
 COFF_VAL_GERACAOLIMITADA_UNIT = "mwmed"
 COFF_ENERGY_UNIT_VALIDATED = True
 COFF_ENERGY_FORMULA = "max((val_geracaoreferenciafinal or val_geracaoreferencia) - val_geracao, 0) * 0.5"
+COFF_REFERENCIA_FINAL_SOURCE = "geracao_referencia_final_mpo_5_13"
+COFF_REFERENCIA_ESTIMADA_SOURCE = "geracao_referencia_estimativa_fallback"
+COFF_PRECOMPUTED_SOURCE = "energia_restringida_precomputada"
 
 
 @dataclass(frozen=True)
@@ -31,6 +34,17 @@ class CurtailmentInterval:
     submercado: str | None
     source_table: str
     data_quality_status: str
+    referencia_oficial: bool = False
+    referencia_calculo_curtailment: str | None = None
+
+
+@dataclass(frozen=True)
+class CoffEnergyCalculation:
+    energia_restringida_mwh: float
+    geracao_verificada_mwh: float | None
+    geracao_referencia_mwh: float | None
+    referencia_oficial: bool
+    referencia_calculo_curtailment: str
 
 
 @dataclass(frozen=True)
@@ -134,15 +148,31 @@ def _timestamp_key(ts: datetime) -> str:
     return str(ts.replace(tzinfo=None))
 
 
-def calculate_coff_energy_mwh(row: dict[str, Any], *, fallback_precomputed_is_mwmed: bool = False) -> tuple[float, float | None, float | None]:
-    """Return curtailed energy for ONS COFF rows.
+def calculate_coff_energy_mwh(row: dict[str, Any], *, fallback_precomputed_is_mwmed: bool = False) -> CoffEnergyCalculation:
+    """Return constrained-off energy for ONS COFF rows.
 
-    ONS COFF fields are MWmed for each 30-minute interval. The physical cut is
-    reference generation minus verified generation, not val_geracaolimitada.
-    val_geracaolimitada is retained only as diagnostic/source metadata.
+    ONS COFF fields are MWmed for each 30-minute interval. In
+    MPO/RO-AO.BR.13 Rev.09, item 5.2.2.10, ``val_geracaoreferenciafinal``
+    corresponds to ``G_Ref_Final``: the adjusted final reference produced by
+    ONS from ``G_ref_Disp`` plus tolerance and any limited-vs-verified
+    adjustment. The constrained-off energy used here is therefore
+    ``max(G_Ref_Final - val_geracao, 0) * 0.5``.
+
+    The document defines "Frustração de Geração" as the energy amount used for
+    ESS apuração by CCEE and "Valor de constrained-off" as the reduction caused
+    by ONS command. In this code we keep the API field name
+    ``energia_restringida_mwh`` while documenting that it is the constrained-off
+    / frustration quantity derived from final reference minus verified
+    generation.
+
+    ``val_geracaolimitada`` is an operational order/teto. It may have entered
+    ONS's ``G_Ref_Final`` calculation, but it is not used directly as curtailed
+    energy in this backend calculation.
     """
     raw_generation = row.get("val_geracao")
     raw_reference = row.get("val_geracaoreferenciafinal")
+    referencia_oficial = raw_reference not in (None, "")
+    referencia_calculo = COFF_REFERENCIA_FINAL_SOURCE if referencia_oficial else COFF_REFERENCIA_ESTIMADA_SOURCE
     if raw_reference in (None, ""):
         raw_reference = row.get("val_geracaoreferencia")
 
@@ -151,11 +181,23 @@ def calculate_coff_energy_mwh(row: dict[str, Any], *, fallback_precomputed_is_mw
         generation_mwmed = _as_float(raw_generation)
         reference_mwmed = _as_float(raw_reference)
         restricted_mwh = max(reference_mwmed - generation_mwmed, 0.0) * COFF_INTERVAL_HOURS
-        return restricted_mwh, generation_mwmed * COFF_INTERVAL_HOURS, reference_mwmed * COFF_INTERVAL_HOURS
+        return CoffEnergyCalculation(
+            energia_restringida_mwh=restricted_mwh,
+            geracao_verificada_mwh=generation_mwmed * COFF_INTERVAL_HOURS,
+            geracao_referencia_mwh=reference_mwmed * COFF_INTERVAL_HOURS,
+            referencia_oficial=referencia_oficial,
+            referencia_calculo_curtailment=referencia_calculo,
+        )
 
     precomputed = _as_float(row.get("energia_restringida_mwh"))
     energy = precomputed * COFF_INTERVAL_HOURS if fallback_precomputed_is_mwmed else precomputed
-    return energy, _as_optional_float(row.get("geracao_verificada_mwh")), _as_optional_float(row.get("geracao_referencia_mwh"))
+    return CoffEnergyCalculation(
+        energia_restringida_mwh=energy,
+        geracao_verificada_mwh=_as_optional_float(row.get("geracao_verificada_mwh")),
+        geracao_referencia_mwh=_as_optional_float(row.get("geracao_referencia_mwh")),
+        referencia_oficial=bool(row.get("referencia_oficial") or False),
+        referencia_calculo_curtailment=str(row.get("referencia_calculo_curtailment") or COFF_PRECOMPUTED_SOURCE),
+    )
 
 
 def classify_interval_quality(energia_restringida_mwh: float, reason: str | None, origin: str | None) -> str:
@@ -184,10 +226,11 @@ def build_curtailment_intervals(
         ts = _as_datetime(row.get("timestamp"))
         reason = row.get("cod_razaorestricao") or row.get("razao_restricao")
         origin = row.get("cod_origemrestricao") or row.get("origem_restricao")
-        energia, geracao_verificada_mwh, geracao_referencia_mwh = calculate_coff_energy_mwh(
+        calc = calculate_coff_energy_mwh(
             row,
             fallback_precomputed_is_mwmed=convert_limited_value_from_mwmed,
         )
+        energia = calc.energia_restringida_mwh
         quality = classify_interval_quality(energia, reason, origin)
         if energia <= 0 or quality == "SEM_RESTRICAO":
             continue
@@ -204,8 +247,8 @@ def build_curtailment_intervals(
                 duracao_horas=COFF_INTERVAL_HOURS,
                 energia_restringida_mwh=energia,
                 perda_reais=float(perda_por_intervalo.get(_timestamp_key(ts), 0.0)),
-                geracao_verificada_mwh=geracao_verificada_mwh,
-                geracao_referencia_mwh=geracao_referencia_mwh,
+                geracao_verificada_mwh=calc.geracao_verificada_mwh,
+                geracao_referencia_mwh=calc.geracao_referencia_mwh,
                 cod_razaorestricao=str(reason) if reason is not None else None,
                 cod_origemrestricao=str(origin) if origin is not None else None,
                 razao_normalizada=normalize_reason(str(reason) if reason is not None else None),
@@ -213,6 +256,8 @@ def build_curtailment_intervals(
                 submercado=str(row.get("submercado")) if row.get("submercado") is not None else None,
                 source_table=str(row.get("source_table") or source_table),
                 data_quality_status=quality,
+                referencia_oficial=calc.referencia_oficial,
+                referencia_calculo_curtailment=calc.referencia_calculo_curtailment,
             )
         )
     return sorted(intervals, key=lambda i: (i.usina_id, i.tecnologia or "", i.timestamp_inicio))

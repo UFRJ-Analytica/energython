@@ -33,6 +33,8 @@ export default function Financeiro() {
     valor: v,
     color: RAZAO_COLORS[k] ?? "#6b7280",
   }))
+  const referenciaOficial = data?.qualidade_dados.referencia_oficial_intervalos ?? 0
+  const referenciaEstimativa = data?.qualidade_dados.referencia_estimativa_intervalos ?? 0
 
   return (
     <div className="container mx-auto max-w-4xl px-6 py-10">
@@ -63,6 +65,9 @@ export default function Financeiro() {
             <div className="rounded-xl border border-border/50 bg-muted/10 p-5">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Energia restringida</p>
               <p className="mt-1 text-3xl font-bold">{fmtMWh(data.total_energia_restringida_mwh)}</p>
+              {(referenciaOficial || referenciaEstimativa) && (
+                <p className="mt-1 text-xs text-muted-foreground">{referenciaOficial} ref. final ONS · {referenciaEstimativa} estim.</p>
+              )}
             </div>
           </div>
 

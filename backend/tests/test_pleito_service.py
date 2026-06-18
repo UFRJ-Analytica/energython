@@ -107,6 +107,7 @@ class TestPleitoService(unittest.TestCase):
         self.assertIn("janela_prazo", ev)
         self.assertIn("reconciliacao", ev)
         self.assertIn("valor_pleitavel_reais", ev)
+        self.assertIn("valor_perda_oportunidade_reais", ev)
 
     def test_listar_eventos_para_pleito_agrega_intervalos_e_expoe_status_franquia_claro(self):
         svc = PleitoService(RepoPleitoEventizacao(mvp_only_nordeste=True), DossierAgent(FakeLLM(), model="fake"))
@@ -121,6 +122,7 @@ class TestPleitoService(unittest.TestCase):
         self.assertEqual(cnf["n_intervalos"], 3)
         self.assertEqual(cnf["energia_restringida_mwh"], 60.0)
         self.assertEqual(cnf["energia_ressarcivel_mwh"], 60.0)
+        self.assertEqual(cnf["valor_perda_oportunidade_reais"], 6000.0)
         self.assertEqual(cnf["valor_pleitavel_reais"], 6000.0)
         self.assertEqual(cnf["status_franquia"], "nao_aplicavel_cnf_termo")
         self.assertIn("Não consome franquia", cnf["status_franquia_label"])
@@ -129,7 +131,9 @@ class TestPleitoService(unittest.TestCase):
 
         rel = next(e for e in out["eventos"] if e["razao_classificada_ons"] == "REL")
         self.assertEqual(rel["status_franquia"], "dentro_franquia")
+        self.assertEqual(rel["valor_perda_oportunidade_reais"], 800.0)
         self.assertEqual(rel["energia_ressarcivel_mwh"], 0.0)
+        self.assertEqual(rel["valor_pleitavel_reais"], 0.0)
 
     def test_gerar_pleito_por_evento_com_template_fallback(self):
         eventos = self.svc.listar_eventos_para_pleito("USI_NE_001", self.inicio, self.fim)["eventos"]

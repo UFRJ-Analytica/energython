@@ -105,6 +105,8 @@ class FinanceiroService:
         total_perda = 0.0
         total_energia = 0.0
         pld_faltante_intervalos = 0
+        referencia_oficial_intervalos = 0
+        referencia_estimativa_intervalos = 0
         perda_por_intervalo: dict[str, float] = {}
         rows_intervalos: list[dict] = []
 
@@ -122,6 +124,11 @@ class FinanceiroService:
             razao = self._fallback_razao(e)
             total_perda += perda
             total_energia += energia
+            referencia_oficial = bool(e.referencia_oficial)
+            if referencia_oficial:
+                referencia_oficial_intervalos += 1
+            else:
+                referencia_estimativa_intervalos += 1
             por_razao[razao] = por_razao.get(razao, 0.0) + perda
             perda_por_intervalo[ts] = perda
             rows_intervalos.append(
@@ -132,6 +139,8 @@ class FinanceiroService:
                     "energia_restringida_mwh": energia,
                     "geracao_verificada_mwh": e.geracao_verificada_mwh,
                     "geracao_referencia_mwh": e.geracao_referencia_mwh,
+                    "referencia_oficial": referencia_oficial,
+                    "referencia_calculo_curtailment": e.referencia_calculo_curtailment,
                     "cod_razaorestricao": e.cod_razaorestricao or e.razao_restricao,
                     "cod_origemrestricao": e.cod_origemrestricao,
                     "razao_restricao": e.razao_restricao,
@@ -148,6 +157,8 @@ class FinanceiroService:
                     "razao_restricao": razao,
                     "cod_razaorestricao": e.cod_razaorestricao,
                     "cod_origemrestricao": e.cod_origemrestricao,
+                    "referencia_oficial": referencia_oficial,
+                    "referencia_calculo_curtailment": e.referencia_calculo_curtailment,
                     "nivel_semantico": "intervalo_restricao",
                 }
             )
@@ -218,6 +229,8 @@ class FinanceiroService:
                 "total_intervalos_restricao": len(intervalos),
                 "eventos_sem_origem": eventos_sem_origem,
                 "energia_unidade_validada": COFF_ENERGY_UNIT_VALIDATED,
+                "referencia_oficial_intervalos": referencia_oficial_intervalos,
+                "referencia_estimativa_intervalos": referencia_estimativa_intervalos,
             },
             "metadata": {
                 "mvp_scope_applied": True,

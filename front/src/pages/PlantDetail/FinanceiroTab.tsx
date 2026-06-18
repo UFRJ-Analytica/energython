@@ -27,6 +27,11 @@ export function FinanceiroTab({ usinaId, inicio, fim }: Props) {
   const totalEventos = data.qualidade_dados.total_eventos_curtailment ?? data.qualidade_dados.total_eventos ?? data.eventos?.length ?? 0
   const totalIntervalos = data.qualidade_dados.total_intervalos_restricao ?? data.serie.length
   const ticketMedioEvento = totalEventos > 0 ? data.total_perda_reais / totalEventos : 0
+  const referenciaOficial = data.qualidade_dados.referencia_oficial_intervalos ?? 0
+  const referenciaEstimativa = data.qualidade_dados.referencia_estimativa_intervalos ?? 0
+  const referenciaSub = referenciaOficial || referenciaEstimativa
+    ? `${referenciaOficial} ref. final ONS · ${referenciaEstimativa} estim.`
+    : undefined
 
   return (
     <div className="space-y-6">
@@ -34,7 +39,7 @@ export function FinanceiroTab({ usinaId, inicio, fim }: Props) {
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <KpiCard title="Perda realizada" value={fmtBRL(data.total_perda_reais)} highlight="danger" />
-        <KpiCard title="Energia restringida" value={fmtMWh(data.total_energia_restringida_mwh)} />
+        <KpiCard title="Energia restringida" value={fmtMWh(data.total_energia_restringida_mwh)} sub={referenciaSub} />
         <KpiCard title="Eventos agregados" value={String(totalEventos)} sub={`Ticket médio ${fmtBRL(ticketMedioEvento)}`} />
         <KpiCard title="Intervalos de restrição" value={String(totalIntervalos)} sub="janelas de 30 min" />
       </div>

@@ -7,6 +7,8 @@ export interface QualidadeDados {
   total_intervalos_restricao?: number
   eventos_sem_origem?: number
   energia_unidade_validada?: boolean
+  referencia_oficial_intervalos?: number
+  referencia_estimativa_intervalos?: number
 }
 
 export interface SeriePerdaItem {
@@ -17,6 +19,8 @@ export interface SeriePerdaItem {
   razao_restricao: string
   cod_razaorestricao?: string | null
   cod_origemrestricao?: string | null
+  referencia_oficial?: boolean | null
+  referencia_calculo_curtailment?: string | null
   nivel_semantico?: string | null
 }
 
@@ -31,6 +35,8 @@ export interface EventoCurtailmentItem {
   perda_total_reais: number
   cod_razaorestricao?: string | null
   cod_origemrestricao?: string | null
+  referencia_oficial?: boolean | null
+  referencia_calculo_curtailment?: string | null
   razao_normalizada?: string | null
   origem_normalizada?: string | null
   elegibilidade_status: string

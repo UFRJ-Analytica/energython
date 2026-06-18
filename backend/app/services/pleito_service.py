@@ -131,6 +131,7 @@ class PleitoService:
                     "energia_restringida_mwh": round(energia, 4),
                     "pld_reais_mwh": round(pld_medio, 4),
                     "valor_intervalos_reais": round(valor_intervalos, 2),
+                    "valor_perda_oportunidade_reais": round(valor_intervalos, 2),
                     "submercado": str(usina.get("submercado") or ""),
                     "elegivel": bool(eleg.elegivel),
                     "canal_recomendado": eleg.canal_recomendado,

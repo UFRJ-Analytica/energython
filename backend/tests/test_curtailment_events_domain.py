@@ -109,16 +109,43 @@ class TestCurtailmentEventsDomain(unittest.TestCase):
         self.assertEqual(intervals[0].data_quality_status, "RESTRICAO_CLASSIFICADA")
         self.assertEqual(intervals[0].perda_reais, 123.0)
 
-    def test_build_intervals_drops_metadata_when_generation_exceeds_reference_even_if_limitada_exists(self):
+    def test_build_intervals_uses_referencia_final_as_adjusted_reference_not_direct_frustration(self):
         rows = [
             {
                 "usina_id": "CJU_TESTE",
                 "timestamp": "2026-05-01T10:00:00",
                 "fonte": "fotovoltaica",
-                "val_geracao": 23.899,
-                "val_geracaolimitada": 31.8,
-                "val_geracaoreferencia": 16.439,
-                "cod_razaorestricao": "CNF",
+                "val_geracao": 94.0,
+                "val_geracaolimitada": 100.0,
+                "val_geracaoreferencia": 150.0,
+                "val_disponibilidade": 200.0,
+                "val_geracaoreferenciafinal": 144.0,
+                "cod_razaorestricao": "REL",
+                "cod_origemrestricao": "SIS",
+                "submercado": "NE",
+            }
+        ]
+
+        intervals = build_curtailment_intervals(rows)
+
+        self.assertEqual(len(intervals), 1)
+        self.assertAlmostEqual(intervals[0].energia_restringida_mwh, 25.0)
+        self.assertAlmostEqual(intervals[0].geracao_verificada_mwh, 47.0)
+        self.assertAlmostEqual(intervals[0].geracao_referencia_mwh, 72.0)
+        self.assertTrue(intervals[0].referencia_oficial)
+        self.assertEqual(intervals[0].referencia_calculo_curtailment, "geracao_referencia_final_mpo_5_13")
+
+    def test_build_intervals_drops_when_generation_exceeds_referencia_final_even_if_limitada_exists(self):
+        rows = [
+            {
+                "usina_id": "CJU_TESTE",
+                "timestamp": "2026-05-01T10:00:00",
+                "fonte": "fotovoltaica",
+                "val_geracao": 94.0,
+                "val_geracaolimitada": 100.0,
+                "val_geracaoreferencia": 150.0,
+                "val_geracaoreferenciafinal": 50.0,
+                "cod_razaorestricao": "REL",
                 "cod_origemrestricao": "SIS",
                 "submercado": "NE",
             }
@@ -127,6 +154,27 @@ class TestCurtailmentEventsDomain(unittest.TestCase):
         intervals = build_curtailment_intervals(rows)
 
         self.assertEqual(intervals, [])
+
+    def test_build_intervals_marks_fallback_reference_as_estimate(self):
+        rows = [
+            {
+                "usina_id": "CJU_TESTE",
+                "timestamp": "2026-05-01T10:00:00",
+                "fonte": "fotovoltaica",
+                "val_geracao": 30.0,
+                "val_geracaoreferencia": 50.0,
+                "cod_razaorestricao": "CNF",
+                "cod_origemrestricao": "SIS",
+                "submercado": "NE",
+            }
+        ]
+
+        intervals = build_curtailment_intervals(rows)
+
+        self.assertEqual(len(intervals), 1)
+        self.assertAlmostEqual(intervals[0].energia_restringida_mwh, 10.0)
+        self.assertFalse(intervals[0].referencia_oficial)
+        self.assertEqual(intervals[0].referencia_calculo_curtailment, "geracao_referencia_estimativa_fallback")
 
     def test_build_intervals_accepts_precomputed_energy_mwh_without_conversion(self):
         self.assertEqual(COFF_VAL_GERACAOLIMITADA_UNIT, "mwmed")

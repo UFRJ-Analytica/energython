@@ -116,6 +116,43 @@ class TestFinanceiroService(unittest.TestCase):
         self.assertEqual(out["eventos"][0]["n_intervalos"], 3)
         self.assertEqual(out["eventos"][0]["elegibilidade_status"], "ELEGIVEL")
 
+    def test_calcular_perda_expoe_referencia_oficial_do_calculo_ons(self):
+        class RepoReferenciaOficial(MockRepository):
+            def get_usina(self, usina_id: str):
+                return {"usina_id": usina_id, "nome": "Teste", "fonte": "fotovoltaica", "submercado": "NE"}
+
+            def get_constrained_off(self, usina_id: str, inicio: datetime, fim: datetime):
+                return [
+                    {
+                        "usina_id": usina_id,
+                        "timestamp": datetime.fromisoformat("2026-05-01T10:00:00"),
+                        "fonte": "fotovoltaica",
+                        "energia_restringida_mwh": 25.0,
+                        "geracao_verificada_mwh": 47.0,
+                        "geracao_referencia_mwh": 72.0,
+                        "referencia_oficial": True,
+                        "referencia_calculo_curtailment": "geracao_referencia_final_mpo_5_13",
+                        "cod_razaorestricao": "REL",
+                        "cod_origemrestricao": "SIS",
+                        "submercado": "NE",
+                    }
+                ]
+
+            def get_pld(self, submercado: str, inicio: datetime, fim: datetime):
+                return [{"timestamp": datetime.fromisoformat("2026-05-01T10:00:00"), "pld_reais_mwh": 100.0}]
+
+        svc = FinanceiroService(RepoReferenciaOficial(mvp_only_nordeste=True))
+        out = svc.calcular_perda(
+            "USI_NE_001",
+            datetime.fromisoformat("2026-05-01T00:00:00"),
+            datetime.fromisoformat("2026-05-01T23:59:00"),
+        )
+
+        self.assertTrue(out["serie"][0]["referencia_oficial"])
+        self.assertEqual(out["serie"][0]["referencia_calculo_curtailment"], "geracao_referencia_final_mpo_5_13")
+        self.assertEqual(out["qualidade_dados"]["referencia_oficial_intervalos"], 1)
+        self.assertEqual(out["qualidade_dados"]["referencia_estimativa_intervalos"], 0)
+
     def test_calcular_perda_serie_e_eventos_fecham_com_total_arredondado(self):
         class RepoArredondamento(_RepoEventizacao):
             def get_constrained_off(self, usina_id: str, inicio: datetime, fim: datetime):

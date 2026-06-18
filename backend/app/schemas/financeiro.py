@@ -11,6 +11,8 @@ class PerdaSerieItem(BaseModel):
     razao_restricao: str
     cod_razaorestricao: str | None = None
     cod_origemrestricao: str | None = None
+    referencia_oficial: bool | None = None
+    referencia_calculo_curtailment: str | None = None
     nivel_semantico: str | None = None
 
 
@@ -42,6 +44,8 @@ class QualidadeDadosPerda(BaseModel):
     total_intervalos_restricao: int = 0
     eventos_sem_origem: int = 0
     energia_unidade_validada: bool = False
+    referencia_oficial_intervalos: int = 0
+    referencia_estimativa_intervalos: int = 0
 
 
 class PerdaOut(BaseModel):

@@ -1,7 +1,10 @@
 import { CalendarClock, DollarSign, TrendingDown, Zap } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { KpiCard } from "@/components/shared/KpiCard"
 import { ErrorState } from "@/components/shared/ErrorState"
+import { EnergyTimelineChart } from "@/components/charts/EnergyTimelineChart"
+import { usePerda } from "@/hooks/useFinanceiro"
 import { useUsinaResumo } from "@/hooks/useUsinas"
 import { fmtBRL, fmtMWh, fmtPct, fmtNum } from "@/lib/formatters"
 import { RAZAO_LABELS } from "@/lib/constants"
@@ -14,6 +17,7 @@ interface Props {
 
 export function SummaryTab({ usinaId, inicio, fim }: Props) {
   const { data, isLoading, error } = useUsinaResumo(usinaId, inicio, fim)
+  const perda = usePerda(usinaId, inicio, fim)
   const isVentosBahia = data?.usina?.usina_id === "CJU_BAVBA"
   const perdasRaw = data?.perda_por_razao || {}
   const apenasIndefinido = Object.keys(perdasRaw).length === 1 && Object.keys(perdasRaw)[0] === "indefinido"
@@ -37,6 +41,9 @@ export function SummaryTab({ usinaId, inicio, fim }: Props) {
     : 0
 
   const perdasPorRazao = Object.entries(perdasNormalizadas).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+  const pldMedioReaisMwh = data && Number(data.total_corte_mwh || 0) > 0
+    ? Number(data.total_perda_reais || 0) / Number(data.total_corte_mwh || 0)
+    : 0
 
   if (isLoading) return <div className="grid grid-cols-2 gap-4 md:grid-cols-4"><Skeleton className="h-28 col-span-4" /></div>
   if (error) return <ErrorState error={error} />
@@ -45,13 +52,24 @@ export function SummaryTab({ usinaId, inicio, fim }: Props) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <KpiCard
-          title="Perda total"
-          value={fmtBRL(data.total_perda_reais)}
-          sub={fmtMWh(data.total_corte_mwh) + " cortados"}
-          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-          highlight="danger"
-        />
+        <Card className="col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Perda total</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-2xl font-bold text-red-500">{fmtBRL(data.total_perda_reais)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">perda financeira no período</p>
+              </div>
+              <div className="border-border/50 sm:border-l sm:pl-4">
+                <p className="text-2xl font-bold text-sky-500">{fmtMWh(data.total_corte_mwh)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">energia de curtailment</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
         <KpiCard
           title="Ressarcível"
           value={fmtPct(percentualRessarcivel)}
@@ -60,9 +78,9 @@ export function SummaryTab({ usinaId, inicio, fim }: Props) {
           highlight={percentualRessarcivel > 50 ? "success" : "warning"}
         />
         <KpiCard
-          title="Eventos agregados"
+          title="Eventos de restrição"
           value={fmtNum(data.total_eventos_corte)}
-          sub={`${fmtNum(data.total_intervalos_restricao ?? 0)} intervalos de 30 min · ticket ${fmtBRL(data.ticket_medio_evento_reais)}`}
+          sub={`PLD médio ${fmtBRL(pldMedioReaisMwh)}/MWh`}
           icon={<Zap className="h-4 w-4 text-muted-foreground" />}
         />
         <KpiCard
@@ -73,6 +91,21 @@ export function SummaryTab({ usinaId, inicio, fim }: Props) {
           highlight="warning"
         />
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Energia perdida no período</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {perda.isLoading ? (
+            <Skeleton className="h-60 w-full" />
+          ) : perda.data?.serie?.length ? (
+            <EnergyTimelineChart serie={perda.data.serie} />
+          ) : (
+            <p className="text-sm text-muted-foreground">Sem energia de curtailment para plotar no período.</p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="rounded-xl border border-border/40 bg-card p-4">
         <p className="mb-3 text-sm font-medium">Perdas por razão de restrição</p>

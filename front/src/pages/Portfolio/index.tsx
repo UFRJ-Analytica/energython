@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useTheme } from "@/components/theme-provider"
 import { useAllUsinas, useUsinas } from "@/hooks/useUsinas"
 import { usePersistedState } from "@/hooks/usePersistedState"
-import { fmtMW } from "@/lib/formatters"
+import { fmtBRL, fmtMWh, fmtMW } from "@/lib/formatters"
 import { FONTES, SUBMERCADOS } from "@/lib/constants"
 import type { UsinaOut } from "@/types/usinas"
 import { PlantMap } from "./PlantMap"
@@ -28,6 +28,12 @@ function PlantCard({ usina }: { usina: UsinaOut }) {
         <div>
           <p className="font-medium text-sm">{usina.nome}</p>
           <p className="text-xs text-muted-foreground capitalize">{usina.fonte} · {fmtMW(usina.potencia_mw)}</p>
+          {typeof usina.total_perda_reais === "number" && (
+            <p className="text-xs text-muted-foreground">Perda financeira: {fmtBRL(usina.total_perda_reais)}</p>
+          )}
+          {typeof usina.total_corte_mwh === "number" && (
+            <p className="text-xs text-muted-foreground">Perda energética: {fmtMWh(usina.total_corte_mwh)}</p>
+          )}
         </div>
       </div>
       <Badge variant="outline" className="text-xs shrink-0">{usina.submercado}</Badge>
@@ -52,6 +58,9 @@ function PlantRow({ usina }: { usina: UsinaOut }) {
       </td>
       <td className="py-3 pr-4 text-sm text-muted-foreground capitalize">{usina.fonte}</td>
       <td className="py-3 pr-4 text-sm text-muted-foreground">{fmtMW(usina.potencia_mw)}</td>
+      <td className="py-3 pr-4 text-sm text-muted-foreground">{typeof usina.total_perda_reais === "number" ? fmtBRL(usina.total_perda_reais) : "—"}</td>
+      <td className="py-3 pr-4 text-sm text-muted-foreground">{typeof usina.total_corte_mwh === "number" ? fmtMWh(usina.total_corte_mwh) : "—"}</td>
+      <td className="py-3 pr-4 text-xs text-muted-foreground">{usina.id_ons ?? "—"}</td>
       <td className="py-3">
         <Badge variant="outline" className="text-xs">{usina.submercado}</Badge>
       </td>
@@ -86,8 +95,8 @@ export default function Portfolio() {
     submercado: submercado !== "all" ? submercado : undefined,
   }
 
-  const { data, isLoading } = useUsinas({ ...filters, limit: LIMIT, offset })
-  const { data: allUsinas } = useAllUsinas(filters)
+  const { data, isLoading, isError, error } = useUsinas({ ...filters, limit: LIMIT, offset })
+  const { data: allUsinas, isError: isAllUsinasError, error: allUsinasError } = useAllUsinas(filters)
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -99,10 +108,10 @@ export default function Portfolio() {
         </Button>
       </header>
 
-      <main className="container mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+      <main className="container mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
         <div className="mb-6 sm:mb-8">
           <h1 className="text-xl font-bold sm:text-2xl">Portfólio de Usinas</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Selecione uma usina para analisar curtailment</p>
+          <p className="mt-1 text-sm text-muted-foreground">Top usinas individuais do NE com maior perda financeira e energética nos últimos 2 meses disponíveis</p>
         </div>
 
         <div className="mb-4 flex flex-wrap gap-2 sm:gap-3">
@@ -128,24 +137,34 @@ export default function Portfolio() {
 
         {isLoading ? (
           <LoadingSkeleton />
+        ) : isError ? (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+            Falha ao carregar usinas individuais do backend: {error instanceof Error ? error.message : "erro desconhecido"}
+          </div>
         ) : (
           <>
+            {isAllUsinasError && (
+              <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                Falha ao carregar coordenadas para o mapa: {allUsinasError instanceof Error ? allUsinasError.message : "erro desconhecido"}
+              </div>
+            )}
             {allUsinas && allUsinas.length > 0 && (
               <div className="mb-4"><PlantMap usinas={allUsinas} /></div>
             )}
 
-            {/* Mobile: cards */}
             <div className="flex flex-col gap-2 sm:hidden">
               {data?.items.map((u) => <PlantCard key={u.usina_id} usina={u} />)}
             </div>
 
-            {/* Desktop: tabela */}
             <table className="hidden w-full sm:table">
               <thead>
                 <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
                   <th className="pb-2 pr-4 font-medium">Usina</th>
                   <th className="pb-2 pr-4 font-medium">Fonte</th>
                   <th className="pb-2 pr-4 font-medium">Capacidade</th>
+                  <th className="pb-2 pr-4 font-medium">Perda financeira</th>
+                  <th className="pb-2 pr-4 font-medium">Perda energética</th>
+                  <th className="pb-2 pr-4 font-medium">ONS</th>
                   <th className="pb-2 font-medium">Submercado</th>
                 </tr>
               </thead>

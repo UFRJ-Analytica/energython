@@ -15,7 +15,7 @@ export default function PlantDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: usina, isLoading, error } = useUsina(id!)
-  const dateRange = usePlantDateRange(usina?.fonte)
+  const dateRange = usePlantDateRange(usina?.data_fim)
 
   if (isLoading) return <div className="container mx-auto max-w-5xl px-4 py-8"><Skeleton className="h-12 w-64" /></div>
   if (error) return <div className="container mx-auto max-w-5xl px-4 py-8"><ErrorState error={error} /></div>

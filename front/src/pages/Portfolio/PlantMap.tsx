@@ -28,6 +28,11 @@ export function PlantMap({ usinas }: Props) {
     return [lat, lon]
   }, [points])
 
+  const maxCurtailment = useMemo(
+    () => Math.max(...points.map((p) => Number(p.total_perda_reais || 0)), 1),
+    [points],
+  )
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -55,7 +60,7 @@ export function PlantMap({ usinas }: Props) {
                 <CircleMarker
                   key={u.usina_id}
                   center={[u.latitude, u.longitude]}
-                  radius={6}
+                  radius={6 + 10 * Math.sqrt(Number(u.total_perda_reais || 0) / maxCurtailment)}
                   pathOptions={{
                     color: "#ffffff",
                     weight: 1,
@@ -66,9 +71,17 @@ export function PlantMap({ usinas }: Props) {
                   <Popup>
                     <div className="space-y-1 text-xs">
                       <div className="font-semibold">{u.nome}</div>
-                      <div>ID: {u.usina_id}</div>
+                      <div>ID ONS: {u.id_ons ?? "—"}</div>
+                      {u.ceg && <div>CEG: {u.ceg}</div>}
                       <div>Fonte: {u.fonte}</div>
-                      <div>Capacidade: {u.potencia_mw.toFixed(2)} MW</div>
+                      <div>Capacidade/conjunto: {u.potencia_mw.toFixed(2)} MW</div>
+                      {typeof u.total_perda_reais === "number" && (
+                        <div>Perda financeira: {u.total_perda_reais.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}</div>
+                      )}
+                      {typeof u.total_corte_mwh === "number" && (
+                        <div>Perda energética: {u.total_corte_mwh.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} MWh</div>
+                      )}
+                      {u.nom_conjuntousina && <div>Conjunto: {u.nom_conjuntousina}</div>}
                       <div>Submercado: {u.submercado}</div>
                       <div>
                         Lat/Lon: {u.latitude.toFixed(4)}, {u.longitude.toFixed(4)}

@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DateRangePicker } from "@/components/shared/DateRangePicker"
 import { ErrorState } from "@/components/shared/ErrorState"
+import { EnergyTimelineChart } from "@/components/charts/EnergyTimelineChart"
 import { usePlantDateRange } from "@/hooks/usePlantDateRange"
+import { usePerda } from "@/hooks/useFinanceiro"
 import { useUsina, useUsinaResumo } from "@/hooks/useUsinas"
 import { useCountUp } from "@/hooks/useCountUp"
 import { fmtBRL, fmtMWh, fmtPct, fmtNum } from "@/lib/formatters"
@@ -26,10 +28,13 @@ export default function Resumo() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const usina = useUsina(id!)
-  const dateRange = usePlantDateRange(usina.data?.fonte)
+  const dateRange = usePlantDateRange(usina.data?.data_fim)
 
   const { data, isLoading, error } = useUsinaResumo(id!, dateRange.inicio, dateRange.fim, dateRange.ready)
-
+  const perda = usePerda(id!, dateRange.inicio, dateRange.fim, dateRange.ready)
+  const pldMedioReaisMwh = data && Number(data.total_corte_mwh || 0) > 0
+    ? Number(data.total_perda_reais || 0) / Number(data.total_corte_mwh || 0)
+    : 0
 
   return (
     <div className="container mx-auto max-w-4xl px-6 py-10">
@@ -63,15 +68,24 @@ export default function Resumo() {
 
       {data && (
         <div className="space-y-8">
-          {/* Protagonista — perda total */}
-          <div className="text-center space-y-2">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground">perda total no período</p>
-            <div className="text-7xl font-black leading-none md:text-8xl">
-              <HeroNumber value={data.total_perda_reais} />
+          {/* Protagonista — perda financeira + energia */}
+          <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-2 md:text-left">
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">perda total no período</p>
+              <div className="text-6xl font-black leading-none md:text-7xl">
+                <HeroNumber value={data.total_perda_reais} />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                perda de oportunidade de geração de receita decorrente de eventos de curtailment
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground">
-              perda de oportunidade de geração de receita decorrente de eventos de curtailment
-            </p>
+            <div className="space-y-2 rounded-2xl border border-sky-500/25 bg-sky-500/5 p-6">
+              <p className="text-xs uppercase tracking-widest text-sky-400/75">energia de curtailment</p>
+              <div className="text-5xl font-black leading-none text-sky-400 md:text-6xl">
+                {fmtMWh(data.total_corte_mwh)}
+              </div>
+              <p className="text-sm text-sky-300/70">energia perdida/restringida no mesmo período</p>
+            </div>
           </div>
 
           {/* Satélites — assimétricos intencionalmente */}
@@ -117,13 +131,23 @@ export default function Resumo() {
             </div>
           </div>
 
+          <div className="rounded-xl border border-border/40 bg-card p-4">
+            <p className="mb-3 text-sm font-medium">Energia perdida no período</p>
+            {perda.isLoading ? (
+              <Skeleton className="h-60 w-full" />
+            ) : perda.data?.serie?.length ? (
+              <EnergyTimelineChart serie={perda.data.serie} />
+            ) : (
+              <p className="text-sm text-muted-foreground">Sem energia de curtailment para plotar no período.</p>
+            )}
+          </div>
+
           {/* Contexto secundário */}
           <div className="flex flex-wrap justify-center gap-6 border-t border-border/40 pt-6 text-center">
             {[
               { label: "Energia restringida", value: fmtMWh(data.total_corte_mwh) },
-              { label: "Eventos agregados", value: fmtNum(data.total_eventos_corte) },
-              { label: "Intervalos de restrição", value: fmtNum(data.total_intervalos_restricao ?? 0) },
-              { label: "Ticket médio", value: fmtBRL(data.ticket_medio_evento_reais) },
+              { label: "Eventos de restrição", value: fmtNum(data.total_eventos_corte) },
+              { label: "PLD médio", value: `${fmtBRL(pldMedioReaisMwh)}/MWh` },
             ].map((item) => (
               <div key={item.label}>
                 <p className="text-xs text-muted-foreground">{item.label}</p>

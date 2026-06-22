@@ -3,6 +3,7 @@ import { createBrowserRouter } from "react-router-dom"
 
 const Home = lazy(() => import("@/pages/Home"))
 const Build = lazy(() => import("@/pages/Build"))
+const Debug = lazy(() => import("@/pages/Debug"))
 const Portfolio = lazy(() => import("@/pages/Portfolio"))
 const PlantShell = lazy(() => import("@/components/PlantShell").then((module) => ({ default: module.PlantShell })))
 const Resumo = lazy(() => import("@/pages/Resumo"))
@@ -33,6 +34,7 @@ function lazyPage(element: ReactNode) {
 export const router = createBrowserRouter([
   { path: "/", element: lazyPage(<Home />) },
   { path: "/build", element: lazyPage(<Build />) },
+  { path: "/debug", element: lazyPage(<Debug />) },
   { path: "/usinas", element: lazyPage(<Portfolio />) },
   {
     path: "/usinas/:id",

@@ -1,8 +1,15 @@
 import { ArrowRight, BarChart3, ShieldCheck, Zap } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 
 export default function Home() {
+  const navigate = useNavigate()
+
+  const openDebug = () => {
+    sessionStorage.setItem("energython.debugAccess", "true")
+    navigate("/debug")
+  }
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#05070b] text-white">
       <div className="pointer-events-none absolute inset-0">
@@ -44,6 +51,14 @@ export default function Home() {
                   Selecione a usina
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-12 rounded-full border-white/20 bg-white/[0.04] px-6 text-sm font-semibold text-white transition hover:bg-white/10"
+                onClick={openDebug}
+              >
+                DEBUG
               </Button>
             </div>
           </div>

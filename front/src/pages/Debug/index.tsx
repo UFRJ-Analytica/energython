@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AnomalyTimeSeriesChart } from "@/components/charts/AnomalyTimeSeriesChart"
 import { ForecastTimeSeriesChart } from "@/components/charts/ForecastTimeSeriesChart"
+import { BatteryLab } from "./BatteryLab"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -141,6 +142,7 @@ export default function DebugPage() {
             <TabsTrigger value="noticias">4. Notícias</TabsTrigger>
             <TabsTrigger value="ranking">5. Ranking</TabsTrigger>
             <TabsTrigger value="unidades">6. Unidades</TabsTrigger>
+            <TabsTrigger value="bateria">7. Bateria</TabsTrigger>
           </TabsList>
 
           <TabsContent value="tower">
@@ -289,6 +291,29 @@ export default function DebugPage() {
                   )}
                 </p>
                 <RankingTable rows={unidades.data?.unidades ?? []} onSelect={setSelectedId} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="bateria">
+            <Card className="border-white/10 bg-white/[0.04] text-white">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  🔋 Laboratório da Bateria (BESS) — simulação a partir da previsão
+                  <Badge variant="outline">{detalhe.data?.usina.nome ? String(detalhe.data.usina.nome) : activeId}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-slate-400">
+                  A bateria é carregada com o <span className="text-violet-300">excedente de geração prevista</span> acima do limite
+                  de entrega e descarrega quando a geração cai — usando a mesma série do modelo de previsão (Real × Baseline × Híbrido).
+                  Ajuste potência, duração e eficiência e use <span className="text-cyan-300">Animar</span> para ver o estado de carga (SoC) evoluir.
+                </p>
+                <BatteryLab
+                  pontos={forecast.data?.pontos ?? []}
+                  nome={detalhe.data?.usina.nome ? String(detalhe.data.usina.nome) : activeId}
+                  isLoading={forecast.isLoading}
+                />
               </CardContent>
             </Card>
           </TabsContent>

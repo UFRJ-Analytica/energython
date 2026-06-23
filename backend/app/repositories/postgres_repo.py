@@ -97,7 +97,7 @@ class PostgresRepository(BaseRepository):
         ), eventos AS (
             SELECT 'dw.mart_restricao_solar'::text AS mart_table, nom_usina, id_ons, ceg, fonte,
                    id_estado, nom_estado, id_subsistema, nom_subsistema,
-                   nom_conjuntousina, nom_usina_conjunto, potencia_mw_conjunto,
+                   nom_conjuntousina, nom_usina_conjunto, potencia_mw, potencia_mw_conjunto,
                    din_instante, COALESCE(corte_mwh, 0)::double precision AS corte_mwh
             FROM dw.mart_restricao_solar_2026, limites
             WHERE COALESCE(corte_mwh, 0) > 0
@@ -106,7 +106,7 @@ class PostgresRepository(BaseRepository):
             UNION ALL
             SELECT 'dw.mart_restricao_eolica'::text AS mart_table, nom_usina, id_ons, ceg, fonte,
                    id_estado, nom_estado, id_subsistema, nom_subsistema,
-                   nom_conjuntousina, nom_usina_conjunto, potencia_mw_conjunto,
+                   nom_conjuntousina, nom_usina_conjunto, potencia_mw, potencia_mw_conjunto,
                    din_instante, COALESCE(corte_mwh, 0)::double precision AS corte_mwh
             FROM dw.mart_restricao_eolica_2026, limites
             WHERE COALESCE(corte_mwh, 0) > 0
@@ -122,7 +122,8 @@ class PostgresRepository(BaseRepository):
             SELECT e.mart_table, e.nom_usina, e.id_ons, e.ceg, e.fonte,
                    e.id_estado, e.nom_estado, e.id_subsistema, e.nom_subsistema,
                    e.nom_conjuntousina, e.nom_usina_conjunto,
-                   MAX(e.potencia_mw_conjunto) AS potencia_mw,
+                   MAX(e.potencia_mw) AS potencia_mw,
+                   MAX(e.potencia_mw_conjunto) AS potencia_mw_conjunto,
                    MIN(e.din_instante) AS data_inicio,
                    MAX(e.din_instante) AS data_fim,
                    SUM(e.corte_mwh)::double precision AS total_corte_mwh,
@@ -143,13 +144,13 @@ class PostgresRepository(BaseRepository):
         )
         SELECT r.mart_table, r.nom_usina, r.id_ons, r.ceg, r.fonte, r.id_estado, r.nom_estado,
                r.id_subsistema, r.nom_subsistema, r.nom_conjuntousina, r.nom_usina_conjunto,
-               COALESCE(r.potencia_mw, p.potencia_mw) AS potencia_mw, r.data_inicio, r.data_fim, r.total_corte_mwh,
+               COALESCE(r.potencia_mw, p.potencia_mw, r.potencia_mw_conjunto) AS potencia_mw, r.data_inicio, r.data_fim, r.total_corte_mwh,
                r.total_perda_reais, r.total_intervalos_restricao, r.submercado,
                u.lat AS latitude, u.lon AS longitude
         FROM ranked r
         LEFT JOIN dw.dim_usina u ON u.ceg_core = r.ceg_core
         LEFT JOIN dw.dim_usina_potencia p
-          ON p.nom_usina = r.nom_usina_conjunto
+          ON p.nom_usina = r.nom_usina
          AND p.id_estado = r.id_estado
         ORDER BY r.total_perda_reais DESC NULLS LAST, r.total_corte_mwh DESC NULLS LAST, r.fonte, r.id_estado, r.nom_usina
         LIMIT 50

@@ -67,7 +67,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          timeout: 90s
+          timeout: 5m
           command_timeout: 20m
           envs: DATABASE_URL,ANTHROPIC_API_KEY,CORS_ORIGINS,MVP_ONLY_NORDESTE,GHCR_TOKEN,GHCR_USER,COMPOSE_B64
           script: |

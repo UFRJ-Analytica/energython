@@ -148,21 +148,33 @@ class PostgresRepository(BaseRepository):
         ), ranked AS (
             SELECT mart.*,
                    REGEXP_REPLACE(ceg, '\\.\\d+$', '') AS ceg_core,
-                   {self._submercado_expr('mart')} AS submercado
+                   {self._submercado_expr('mart')} AS submercado,
+                   CASE
+                       WHEN UPPER(COALESCE(fonte, '')) LIKE '%FOTOV%' OR UPPER(COALESCE(fonte, '')) LIKE '%SOLAR%' THEN 'solar'
+                       WHEN UPPER(COALESCE(fonte, '')) LIKE '%EOL%' THEN 'eolica'
+                       ELSE 'outra'
+                   END AS fonte_key
             FROM mart
             WHERE (:ne_only = false OR UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') OR {self._submercado_expr('mart')} = 'NE')
               AND COALESCE(total_perda_reais, 0) > 0
+        ), selected AS (
+            SELECT ranked.*,
+                   ROW_NUMBER() OVER (ORDER BY total_perda_reais DESC NULLS LAST, total_corte_mwh DESC NULLS LAST) AS rank_overall,
+                   ROW_NUMBER() OVER (PARTITION BY fonte_key ORDER BY total_perda_reais DESC NULLS LAST, total_corte_mwh DESC NULLS LAST) AS rank_fonte
+            FROM ranked
         )
         SELECT r.mart_table, r.nom_usina, r.id_ons, r.ceg, r.fonte, r.id_estado, r.nom_estado,
                r.id_subsistema, r.nom_subsistema, r.nom_conjuntousina, r.nom_usina_conjunto,
                COALESCE(r.potencia_mw, p.potencia_mw, r.potencia_mw_conjunto) AS potencia_mw, r.data_inicio, r.data_fim, r.total_corte_mwh,
                r.total_perda_reais, r.total_intervalos_restricao, r.submercado,
                u.lat AS latitude, u.lon AS longitude
-        FROM ranked r
+        FROM selected r
         LEFT JOIN dw.dim_usina u ON u.ceg_core = r.ceg_core
         LEFT JOIN dw.dim_usina_potencia p
           ON p.nom_usina = r.nom_usina
          AND p.id_estado = r.id_estado
+        WHERE r.rank_overall <= 45
+           OR (r.fonte_key = 'solar' AND r.rank_fonte <= 10 AND COALESCE(r.total_perda_reais, 0) >= 1000)
         ORDER BY r.total_perda_reais DESC NULLS LAST, r.total_corte_mwh DESC NULLS LAST, r.fonte, r.id_estado, r.nom_usina
         LIMIT 50
         """

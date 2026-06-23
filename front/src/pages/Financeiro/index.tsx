@@ -20,7 +20,7 @@ const RAZAO_COLORS: Record<string, string> = {
 export default function Financeiro() {
   const { id } = useParams<{ id: string }>()
   const usina = useUsina(id!)
-  const dateRange = usePlantDateRange(usina.data?.fonte)
+  const dateRange = usePlantDateRange(usina.data?.data_fim)
   const { data, isLoading, error } = usePerda(id!, dateRange.inicio, dateRange.fim, dateRange.ready)
 
   const serie = data?.serie.map((s) => ({

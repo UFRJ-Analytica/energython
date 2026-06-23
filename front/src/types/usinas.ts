@@ -6,6 +6,15 @@ export interface UsinaOut {
   submercado: string
   latitude?: number | null
   longitude?: number | null
+  id_ons?: string | null
+  ceg?: string | null
+  nom_conjuntousina?: string | null
+  nom_usina_conjunto?: string | null
+  total_corte_mwh?: number | null
+  total_perda_reais?: number | null
+  total_intervalos_restricao?: number | null
+  data_inicio?: string | null
+  data_fim?: string | null
 }
 
 export interface UsinaListOut {

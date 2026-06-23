@@ -11,6 +11,15 @@ class UsinaOut(BaseModel):
     submercado: str
     latitude: float | None = None
     longitude: float | None = None
+    id_ons: str | None = None
+    ceg: str | None = None
+    nom_conjuntousina: str | None = None
+    nom_usina_conjunto: str | None = None
+    total_corte_mwh: float | None = None
+    total_perda_reais: float | None = None
+    total_intervalos_restricao: int | None = None
+    data_inicio: str | None = None
+    data_fim: str | None = None
 
 
 class UsinaListOut(BaseModel):

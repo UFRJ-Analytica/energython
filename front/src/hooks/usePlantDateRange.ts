@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from "react"
 import { getPlantDateWindow } from "@/lib/dateWindows"
 
-export function usePlantDateRange(fonte?: string | null) {
-  const window = useMemo(() => getPlantDateWindow(fonte), [fonte])
+export function usePlantDateRange(availableFim?: string | null) {
+  const window = useMemo(() => getPlantDateWindow(availableFim), [availableFim])
   const [inicio, setInicio] = useState("")
   const [fim, setFim] = useState("")
 
   useEffect(() => {
-    if (!fonte) return
     setInicio(window.defaultInicio)
     setFim(window.defaultFim)
-  }, [fonte, window.defaultInicio, window.defaultFim])
+  }, [window.defaultInicio, window.defaultFim])
 
   return {
     inicio,
@@ -21,6 +20,6 @@ export function usePlantDateRange(fonte?: string | null) {
     },
     minDate: window.minDate,
     maxDate: window.maxDate,
-    ready: Boolean(fonte && inicio && fim),
+    ready: Boolean(inicio && fim),
   }
 }

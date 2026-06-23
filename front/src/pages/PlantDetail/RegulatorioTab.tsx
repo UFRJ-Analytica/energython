@@ -142,7 +142,7 @@ export function RegulatorioTab({ usinaId, inicio, fim }: Props) {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <KpiCard title="Valor pleitável total" value={fmtBRL(data.valor_total_pleitavel_reais)} highlight="success" />
             <KpiCard title="Energia ressarcível" value={fmtMWh(data.energia_ressarcivel_total_mwh)} />
-            <KpiCard title="Eventos agregados elegíveis" value={`${fmtNum(data.eventos_elegiveis)} / ${fmtNum(data.total_eventos)}`} sub={`${fmtNum(data.total_intervalos_restricao ?? 0)} intervalos de 30 min`} />
+            <KpiCard title="Eventos de restrição elegíveis" value={`${fmtNum(data.eventos_elegiveis)} / ${fmtNum(data.total_eventos)}`} sub="eventos agregados" />
             <KpiCard title="Franquia REL anual" value={`${fmtNum(data.franquia.horas_definidas)} h`} sub="CNF não consome esta franquia" />
           </div>
 

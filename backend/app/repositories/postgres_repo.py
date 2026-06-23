@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time as _time
 from datetime import datetime
 import re
 import unicodedata
@@ -9,6 +10,16 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.domain.top_plants import filter_top_50_usinas, is_top_50_usina, list_top_50_usinas
 from app.repositories.base import BaseRepository
+
+# ---------------------------------------------------------------------------
+# Caches compartilhados (nível de módulo) para a camada de GRANULARIDADE ÚNICA.
+# Os marts dw.mart_eolica/dw.mart_solar somam ~12M linhas e dim_usina ~25k.
+# Sem cache, cada request DEBUG reagrega tudo (~10s). Como o repositório é
+# instanciado por request (Depends), o cache precisa viver no módulo.
+# ---------------------------------------------------------------------------
+_MART_AGG_CACHE: dict = {}       # chave: ne_only -> (ts, rows)
+_MART_AGG_TTL = 600              # segundos
+_COORDS_SHARED_CACHE: dict = {"data": None}
 
 
 class PostgresRepository(BaseRepository):
@@ -396,69 +407,44 @@ class PostgresRepository(BaseRepository):
         except (ProgrammingError, OperationalError):
             self.db.rollback()
 
-            # Fallback preferencial: tabelas COFF com código de razão explícito (CNF/ENE/REL)
+            # Fallback preferencial — BANCO ATUALIZADO (hacka-energinn / camada silver):
+            # a base nova traz a COFF eólica em `public.restricao_coff_eolica_detail`
+            # (granularidade 30min). As antigas `restricao_coff_eolica_usi` e
+            # `restricao_coff_fotovoltaica` não existem mais. Esta tabela não possui
+            # `cod_razaorestricao`; usamos a sentinela 'COFF' para preservar o evento e
+            # mantemos exatamente os MESMOS aliases de saída do contrato.
+            #   geracao_verificada_mwh <- val_geracaoverificada
+            #   geracao_referencia_mwh <- val_geracaoestimada
+            #   chave da usina         <- nom_usina (a detail não tem id_ons)
             sql_public_coff = """
             WITH base AS (
                 SELECT
-                    id_ons AS usina_id,
+                    nom_usina AS usina_id,
                     CASE
                         WHEN pg_typeof(din_instante)::text LIKE 'timestamp%' THEN din_instante::timestamp
                         ELSE to_timestamp(din_instante, 'YYYY-MM-DD HH24:MI:SS')
                     END AS timestamp,
                     nom_usina AS fonte,
-                    COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0) * 0.5 AS geracao_verificada_mwh,
-                    COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0) * 0.5 AS geracao_referencia_mwh,
+                    COALESCE(NULLIF(REPLACE(val_geracaoverificada::text, ',', '.'), '')::double precision, 0) * 0.5 AS geracao_verificada_mwh,
+                    COALESCE(NULLIF(REPLACE(val_geracaoestimada::text, ',', '.'), '')::double precision, 0) * 0.5 AS geracao_referencia_mwh,
                     GREATEST(
-                        COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0)
-                        - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
+                        COALESCE(NULLIF(REPLACE(val_geracaoestimada::text, ',', '.'), '')::double precision, 0)
+                        - COALESCE(NULLIF(REPLACE(val_geracaoverificada::text, ',', '.'), '')::double precision, 0),
                         0
                     ) * 0.5 AS energia_restringida_mwh,
-                    (NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '') IS NOT NULL) AS referencia_oficial,
-                    CASE
-                        WHEN NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '') IS NOT NULL THEN 'geracao_referencia_final_mpo_5_13'
-                        ELSE 'geracao_referencia_estimativa_fallback'
-                    END AS referencia_calculo_curtailment,
-                    NULLIF(REPLACE(val_geracaolimitada::text, ',', '.'), '')::double precision AS geracao_limitada_mwmed,
-                    cod_razaorestricao AS cod_razaorestricao,
-                    cod_origemrestricao AS origem_restricao,
+                    (NULLIF(REPLACE(val_geracaoestimada::text, ',', '.'), '') IS NOT NULL) AS referencia_oficial,
+                    'coff_eolica_detail_geracao_estimada'::text AS referencia_calculo_curtailment,
+                    NULL::double precision AS geracao_limitada_mwmed,
+                    'COFF'::text AS cod_razaorestricao,
+                    NULL::text AS origem_restricao,
                     NULL::text AS razao_restricao,
                     CASE
-                        WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('NE', 'NORDESTE') THEN 'NE'
-                        WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('N', 'NORTE') THEN 'N'
-                        ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
+                        WHEN UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') THEN 'NE'
+                        WHEN UPPER(COALESCE(id_estado, '')) IN ('PA','TO','AP','AM','RR','AC','RO') THEN 'N'
+                        ELSE UPPER(COALESCE(id_estado, ''))
                     END AS submercado
-                FROM public.restricao_coff_eolica_usi
-                WHERE id_ons = :usina_id
-
-                UNION ALL
-
-                SELECT
-                    id_ons AS usina_id,
-                    din_instante::timestamp AS timestamp,
-                    nom_usina AS fonte,
-                    COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0) * 0.5 AS geracao_verificada_mwh,
-                    COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0) * 0.5 AS geracao_referencia_mwh,
-                    GREATEST(
-                        COALESCE(NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '')::double precision, NULLIF(REPLACE(val_geracaoreferencia::text, ',', '.'), '')::double precision, 0)
-                        - COALESCE(NULLIF(REPLACE(val_geracao::text, ',', '.'), '')::double precision, 0),
-                        0
-                    ) * 0.5 AS energia_restringida_mwh,
-                    (NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '') IS NOT NULL) AS referencia_oficial,
-                    CASE
-                        WHEN NULLIF(REPLACE(val_geracaoreferenciafinal::text, ',', '.'), '') IS NOT NULL THEN 'geracao_referencia_final_mpo_5_13'
-                        ELSE 'geracao_referencia_estimativa_fallback'
-                    END AS referencia_calculo_curtailment,
-                    NULLIF(REPLACE(val_geracaolimitada::text, ',', '.'), '')::double precision AS geracao_limitada_mwmed,
-                    cod_razaorestricao AS cod_razaorestricao,
-                    cod_origemrestricao AS origem_restricao,
-                    NULL::text AS razao_restricao,
-                    CASE
-                        WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('NE', 'NORDESTE') THEN 'NE'
-                        WHEN UPPER(COALESCE(id_subsistema, nom_subsistema, '')) IN ('N', 'NORTE') THEN 'N'
-                        ELSE UPPER(COALESCE(id_subsistema, nom_subsistema, ''))
-                    END AS submercado
-                FROM public.restricao_coff_fotovoltaica
-                WHERE id_ons = :usina_id
+                FROM public.restricao_coff_eolica_detail
+                WHERE nom_usina = :usina_id
             )
             SELECT usina_id, timestamp, fonte, geracao_verificada_mwh, geracao_referencia_mwh,
                    energia_restringida_mwh, referencia_oficial, referencia_calculo_curtailment,
@@ -975,3 +961,213 @@ class PostgresRepository(BaseRepository):
         ORDER BY timestamp
         """
         return self._safe_mappings_query(sql, {"usina_id": usina_id, "inicio": inicio, "fim": fim})
+
+    # ------------------------------------------------------------------ #
+    # GRANULARIDADE ÚNICA (marts renováveis) — usado pela camada DEBUG.
+    # Fonte: dw.mart_eolica + dw.mart_solar (1 linha por usina, grão 30min,
+    # colunas cruas). Unifica eólica e solar numa mesma granularidade para
+    # análise e treino dos modelos. NÃO altera o fluxo de produção; apenas
+    # adiciona uma forma de carregar os dados do banco atualizado.
+    #
+    # Esquema real (validado em hacka-energinn):
+    #   dw.mart_eolica / dw.mart_solar: din_instante, nom_usina, id_estado,
+    #     id_subsistema (NE/N/S/SE), nom_subsistema, fonte (EOLICA/FOTOVOLTAICA),
+    #     potencia_mw, val_geracao, val_geracaoreferencia,
+    #     val_geracaoreferenciafinal, cod_razaorestricao, cod_origemrestricao.
+    #   Coordenadas/potência: o mart traz potencia_mw (parcial) e NÃO traz lat/lon.
+    #   dim_usina.potencia_mw é nula e os nomes não casam 1:1; por isso usamos a
+    #   potência do próprio mart e deixamos lat/lon nulos (coords entram depois,
+    #   quando houver chave estável de join).
+    # ------------------------------------------------------------------ #
+    _MART_AGG_SQL = """
+        SELECT
+            m.nom_usina                                  AS usina_id,
+            m.nom_usina                                  AS nome,
+            '{fonte_out}'::text                          AS fonte,
+            max(COALESCE(m.potencia_mw, 0))::double precision AS potencia_mw,
+            CASE
+                WHEN UPPER(COALESCE(max(m.id_subsistema), '')) IN ('NE','NORDESTE') THEN 'NE'
+                WHEN UPPER(COALESCE(max(m.id_subsistema), '')) IN ('N','NORTE') THEN 'N'
+                WHEN UPPER(COALESCE(max(m.id_subsistema), '')) IN ('S','SUL') THEN 'S'
+                ELSE 'SE'
+            END                                          AS submercado,
+            max(m.id_estado)                             AS id_estado,
+            NULL::double precision                       AS latitude,
+            NULL::double precision                       AS longitude,
+            count(*)                                     AS n_reg,
+            sum(COALESCE(m.val_geracao, 0))/2.0          AS ger_mwh,
+            sum(GREATEST(
+                COALESCE(m.val_geracaoreferenciafinal, m.val_geracaoreferencia, 0)
+                - COALESCE(m.val_geracao, 0), 0))/2.0    AS corte_mwh,
+            sum(CASE WHEN m.cod_razaorestricao IN ('CNF','REL','CF','IE')
+                     THEN GREATEST(COALESCE(m.val_geracaoreferenciafinal, m.val_geracaoreferencia, 0) - COALESCE(m.val_geracao, 0), 0)
+                     ELSE 0 END)/2.0                      AS corte_ressarc_mwh,
+            sum(CASE WHEN m.cod_razaorestricao IS NOT NULL THEN 1 ELSE 0 END) AS n_restrito
+        FROM dw.{table} m
+        GROUP BY m.nom_usina
+    """
+
+    def _aggregate_all_marts(self) -> list[dict]:
+        """Agrega TODAS as usinas (eólica + solar) dos marts uma única vez, com
+        cache de módulo (TTL). É a base de granularidade ÚNICA por nom_usina —
+        list/get/ranking/unidades derivam daqui sem reescanear os 12M de linhas."""
+        key = bool(self.mvp_only_nordeste)
+        hit = _MART_AGG_CACHE.get(key)
+        if hit and (_time.time() - hit[0]) < _MART_AGG_TTL:
+            return hit[1]
+
+        eol = self._MART_AGG_SQL.format(fonte_out="eolica", table="mart_eolica")
+        sol = self._MART_AGG_SQL.format(fonte_out="solar", table="mart_solar")
+        sql = f"""
+        WITH eol AS ({eol}),
+             sol AS ({sol}),
+             uni AS (SELECT * FROM eol UNION ALL SELECT * FROM sol)
+        SELECT usina_id, nome, fonte, potencia_mw, submercado, id_estado, latitude, longitude,
+               n_reg, ger_mwh, corte_mwh, corte_ressarc_mwh, n_restrito
+        FROM uni
+        WHERE (:ne_only = false OR submercado = 'NE')
+        ORDER BY corte_mwh DESC
+        """
+        rows = self._safe_mappings_query(sql, {"ne_only": self.mvp_only_nordeste})
+        rows = self._enrich_coords(rows)
+        _MART_AGG_CACHE[key] = (_time.time(), rows)
+        return rows
+
+    def list_usinas_mart(self, limit: int = 50):
+        """Lista usinas na granularidade única (eólica + solar) a partir dos marts."""
+        rows = self._aggregate_all_marts()
+        return rows[: int(limit)]
+
+    # --- coordenadas para o mapa: match por nome + fallback centróide estadual ---
+    @staticmethod
+    def _norm_nome(s) -> str:
+        import re
+        import unicodedata
+        s = unicodedata.normalize("NFKD", str(s or "")).encode("ascii", "ignore").decode().lower()
+        s = re.sub(r"\b(conj|conjunto|eolico|eolica|complexo|parque|eol|usina|kv|\d+)\b", " ", s)
+        s = re.sub(r"[^a-z ]", " ", s)
+        return re.sub(r"\s+", " ", s).strip()
+
+    def _coords_indexes(self):
+        if _COORDS_SHARED_CACHE["data"] is not None:
+            return _COORDS_SHARED_CACHE["data"]
+        por_nome: dict[str, tuple[float, float]] = {}
+        centro: dict[str, list] = {}
+        try:
+            rows = self.db.execute(text(
+                "SELECT d.nom_usina, d.lat, d.lon, g.id_estado "
+                "FROM dw.dim_usina d LEFT JOIN dw.dim_geografia g ON g.sk_geografia = d.sk_geografia "
+                "WHERE d.lat IS NOT NULL AND d.lon IS NOT NULL"
+            )).mappings().all()
+            acc: dict[str, list] = {}
+            for r in rows:
+                key = self._norm_nome(r["nom_usina"])
+                if key:
+                    acc.setdefault(key, []).append((float(r["lat"]), float(r["lon"])))
+                uf = (r.get("id_estado") or "").upper()
+                if uf:
+                    centro.setdefault(uf, []).append((float(r["lat"]), float(r["lon"])))
+            for k, v in acc.items():
+                la = sum(p[0] for p in v) / len(v)
+                lo = sum(p[1] for p in v) / len(v)
+                por_nome[k] = (la, lo)
+        except Exception:
+            self.db.rollback()
+        centroides = {uf: (sum(p[0] for p in v) / len(v), sum(p[1] for p in v) / len(v)) for uf, v in centro.items()}
+        _COORDS_SHARED_CACHE["data"] = {"nome": por_nome, "centro": centroides}
+        return _COORDS_SHARED_CACHE["data"]
+
+    def _enrich_coords(self, rows: list[dict]) -> list[dict]:
+        if not rows:
+            return rows
+        idx = self._coords_indexes()
+        por_nome, centro = idx["nome"], idx["centro"]
+        nome_keys = list(por_nome.keys())
+        import random
+        rng = random.Random(42)
+        for r in rows:
+            if r.get("latitude") is not None and r.get("longitude") is not None:
+                continue
+            key = self._norm_nome(r.get("nome") or r.get("usina_id"))
+            coord = por_nome.get(key)
+            if coord is None and key:
+                mt = set(key.split())
+                best, best_sc = None, 0.0
+                for dn in nome_keys:
+                    dt = set(dn.split())
+                    if not dt:
+                        continue
+                    sc = len(mt & dt) / max(len(mt | dt), 1)
+                    if sc > best_sc:
+                        best_sc, best = sc, dn
+                if best is not None and best_sc >= 0.5:
+                    coord = por_nome[best]
+            if coord is None:
+                uf = str(r.get("id_estado") or "").upper()
+                base = centro.get(uf)
+                if base is not None:
+                    coord = (base[0] + rng.uniform(-0.25, 0.25), base[1] + rng.uniform(-0.25, 0.25))
+            if coord is not None:
+                r["latitude"], r["longitude"] = round(coord[0], 5), round(coord[1], 5)
+        return rows
+
+    def get_usina_mart(self, usina_id: str):
+        """Ficha de uma usina (eólica/solar) na granularidade única dos marts.
+
+        Deriva do agregado já cacheado (_aggregate_all_marts) para não reescanear
+        os marts a cada detalhe. Inclui métricas agregadas (corte/ger/n_reg) além
+        do contrato base de identificação.
+        """
+        for r in self._aggregate_all_marts():
+            if str(r.get("usina_id")) == str(usina_id):
+                return dict(r)
+        return None
+
+    def get_serie_mart(self, usina_id: str, inicio: datetime, fim: datetime, limit: int = 4000):
+        """Série semi-horária de uma usina (eólica OU solar) no grão único do mart.
+
+        Mantém os MESMOS aliases consumidos pela camada DEBUG:
+        timestamp, geracao_mwh, geracao_referencia_mwh, energia_restringida_mwh,
+        cod_razaorestricao, cod_origemrestricao, fonte.
+        """
+        sql = """
+        WITH base AS (
+            SELECT
+                nom_usina AS usina_id,
+                din_instante::timestamp AS timestamp,
+                'eolica'::text AS fonte,
+                COALESCE(val_geracao, 0)::double precision AS geracao_mw,
+                COALESCE(val_geracaoreferenciafinal, val_geracaoreferencia, 0)::double precision AS referencia_mw,
+                cod_razaorestricao,
+                cod_origemrestricao
+            FROM dw.mart_eolica
+            WHERE nom_usina = :usina_id AND din_instante BETWEEN :inicio AND :fim
+            UNION ALL
+            SELECT
+                nom_usina AS usina_id,
+                din_instante::timestamp AS timestamp,
+                'solar'::text AS fonte,
+                COALESCE(val_geracao, 0)::double precision AS geracao_mw,
+                COALESCE(val_geracaoreferenciafinal, val_geracaoreferencia, 0)::double precision AS referencia_mw,
+                cod_razaorestricao,
+                cod_origemrestricao
+            FROM dw.mart_solar
+            WHERE nom_usina = :usina_id AND din_instante BETWEEN :inicio AND :fim
+        )
+        SELECT
+            usina_id,
+            timestamp,
+            fonte,
+            geracao_mw / 2.0 AS geracao_mwh,
+            referencia_mw / 2.0 AS geracao_referencia_mwh,
+            GREATEST(referencia_mw - geracao_mw, 0) / 2.0 AS energia_restringida_mwh,
+            cod_razaorestricao,
+            cod_origemrestricao
+        FROM base
+        ORDER BY timestamp
+        LIMIT :limit
+        """
+        return self._safe_mappings_query(
+            sql, {"usina_id": usina_id, "inicio": inicio, "fim": fim, "limit": int(limit)}
+        )
+

@@ -35,3 +35,12 @@ backend/**/__pycache__/
 
 # ML artifacts/datasets locais
 backend/data/training_*/
+
+.venv-eda/
+
+
+__marimo__/
+
+stramlit/
+
+

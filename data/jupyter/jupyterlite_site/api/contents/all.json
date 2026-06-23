@@ -1,0 +1,57 @@
+{
+  "content": [
+    {
+      "content": null,
+      "created": "2026-06-22T01:12:49.612319Z",
+      "format": null,
+      "hash": null,
+      "hash_algorithm": null,
+      "last_modified": "2026-06-22T01:12:49.612319Z",
+      "mimetype": null,
+      "name": "data",
+      "path": "data",
+      "size": null,
+      "type": "directory",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2026-06-22T01:12:49.611980Z",
+      "format": null,
+      "hash": null,
+      "hash_algorithm": null,
+      "last_modified": "2026-06-22T01:12:46.078575Z",
+      "mimetype": "application/json",
+      "name": "conjunto_eolico_kairos_metadata.json",
+      "path": "conjunto_eolico_kairos_metadata.json",
+      "size": 358,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2026-06-22T01:12:49.612942Z",
+      "format": null,
+      "hash": null,
+      "hash_algorithm": null,
+      "last_modified": "2026-06-22T01:12:46.110686Z",
+      "mimetype": null,
+      "name": "eda_conjunto_eolico_kairos.ipynb",
+      "path": "eda_conjunto_eolico_kairos.ipynb",
+      "size": 6093,
+      "type": "notebook",
+      "writable": true
+    }
+  ],
+  "created": "2026-06-22T01:12:49.612870Z",
+  "format": "json",
+  "hash": null,
+  "hash_algorithm": null,
+  "last_modified": "2026-06-22T01:12:49.612870Z",
+  "mimetype": null,
+  "name": "",
+  "path": "",
+  "size": null,
+  "type": "directory",
+  "writable": true
+}

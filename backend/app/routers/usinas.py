@@ -113,11 +113,15 @@ def resumo_usina(
         or 0
     )
     ticket_medio = (total_perda / total_eventos) if total_eventos else 0.0
-    perda_ressarcivel = sum(
-        float(v or 0.0)
-        for razao, v in (perda.get("por_razao") or {}).items()
-        if policy.is_elegivel(str(razao))
-    )
+    perda_ressarcivel_oficial = perda.get("total_perda_ressarcivel_reais")
+    if perda_ressarcivel_oficial is not None:
+        perda_ressarcivel = float(perda_ressarcivel_oficial or 0.0)
+    else:
+        perda_ressarcivel = sum(
+            float(v or 0.0)
+            for razao, v in (perda.get("por_razao") or {}).items()
+            if policy.is_elegivel(str(razao))
+        )
     perc_ress = (perda_ressarcivel / total_perda * 100.0) if total_perda > 0 else 0.0
 
     exposicao_prevista_30d = financeiro.projetar_exposicao(usina_id, horizonte_horas=24 * 30)

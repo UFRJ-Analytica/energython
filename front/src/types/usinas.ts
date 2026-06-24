@@ -11,7 +11,10 @@ export interface UsinaOut {
   nom_conjuntousina?: string | null
   nom_usina_conjunto?: string | null
   total_corte_mwh?: number | null
+  total_ressarcivel_mwh?: number | null
   total_perda_reais?: number | null
+  total_perda_ressarcivel_reais?: number | null
+  pld_faltante_intervalos?: number | null
   total_intervalos_restricao?: number | null
   data_inicio?: string | null
   data_fim?: string | null

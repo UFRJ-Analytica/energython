@@ -28,6 +28,9 @@ function PlantCard({ usina }: { usina: UsinaOut }) {
         <div>
           <p className="font-medium text-sm">{usina.nome}</p>
           <p className="text-xs text-muted-foreground capitalize">{usina.fonte} · {fmtMW(usina.potencia_mw)}</p>
+          {usina.nom_conjuntousina && (
+            <p className="text-xs text-muted-foreground">Conjunto regulatório: {usina.nom_conjuntousina}</p>
+          )}
           {typeof usina.total_perda_reais === "number" && (
             <p className="text-xs text-muted-foreground">Perda financeira: {fmtBRL(usina.total_perda_reais)}</p>
           )}
@@ -58,8 +61,8 @@ function PlantRow({ usina }: { usina: UsinaOut }) {
       </td>
       <td className="py-3 pr-4 text-sm text-muted-foreground capitalize">{usina.fonte}</td>
       <td className="py-3 pr-4 text-sm text-muted-foreground">{fmtMW(usina.potencia_mw)}</td>
-      <td className="py-3 pr-4 text-sm text-muted-foreground">{typeof usina.total_perda_reais === "number" ? fmtBRL(usina.total_perda_reais) : "—"}</td>
       <td className="py-3 pr-4 text-sm text-muted-foreground">{typeof usina.total_corte_mwh === "number" ? fmtMWh(usina.total_corte_mwh) : "—"}</td>
+      <td className="py-3 pr-4 text-sm text-muted-foreground">{typeof usina.total_perda_reais === "number" ? fmtBRL(usina.total_perda_reais) : "—"}</td>
       <td className="py-3 pr-4 text-xs text-muted-foreground">{usina.id_ons ?? "—"}</td>
       <td className="py-3">
         <Badge variant="outline" className="text-xs">{usina.submercado}</Badge>
@@ -111,7 +114,7 @@ export default function Portfolio() {
       <main className="container mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
         <div className="mb-6 sm:mb-8">
           <h1 className="text-xl font-bold sm:text-2xl">Portfólio de Usinas</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Top usinas individuais do NE com maior perda financeira e energética nos últimos 2 meses disponíveis</p>
+          <p className="mt-1 text-sm text-muted-foreground">Top usinas individuais do NE por energia cortada nos últimos 2 meses disponíveis; conjunto ONS aparece apenas como metadado regulatório</p>
         </div>
 
         <div className="mb-4 flex flex-wrap gap-2 sm:gap-3">
@@ -162,8 +165,8 @@ export default function Portfolio() {
                   <th className="pb-2 pr-4 font-medium">Usina</th>
                   <th className="pb-2 pr-4 font-medium">Fonte</th>
                   <th className="pb-2 pr-4 font-medium">Capacidade</th>
-                  <th className="pb-2 pr-4 font-medium">Perda financeira</th>
                   <th className="pb-2 pr-4 font-medium">Perda energética</th>
+                  <th className="pb-2 pr-4 font-medium">Perda financeira</th>
                   <th className="pb-2 pr-4 font-medium">ONS</th>
                   <th className="pb-2 font-medium">Submercado</th>
                 </tr>

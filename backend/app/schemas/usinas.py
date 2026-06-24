@@ -16,7 +16,10 @@ class UsinaOut(BaseModel):
     nom_conjuntousina: str | None = None
     nom_usina_conjunto: str | None = None
     total_corte_mwh: float | None = None
+    total_ressarcivel_mwh: float | None = None
     total_perda_reais: float | None = None
+    total_perda_ressarcivel_reais: float | None = None
+    pld_faltante_intervalos: int | None = None
     total_intervalos_restricao: int | None = None
     data_inicio: str | None = None
     data_fim: str | None = None

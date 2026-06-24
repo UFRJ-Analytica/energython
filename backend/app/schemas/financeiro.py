@@ -8,6 +8,8 @@ class PerdaSerieItem(BaseModel):
     energia_restringida_mwh: float
     pld_reais_mwh: float
     perda_reais: float
+    energia_ressarcivel_mwh: float | None = None
+    perda_ressarcivel_reais: float | None = None
     razao_restricao: str
     cod_razaorestricao: str | None = None
     cod_origemrestricao: str | None = None
@@ -46,12 +48,15 @@ class QualidadeDadosPerda(BaseModel):
     energia_unidade_validada: bool = False
     referencia_oficial_intervalos: int = 0
     referencia_estimativa_intervalos: int = 0
+    ressarcivel_oficial_intervalos: int = 0
 
 
 class PerdaOut(BaseModel):
     usina_id: str
     total_perda_reais: float
     total_energia_restringida_mwh: float
+    total_perda_ressarcivel_reais: float | None = None
+    total_energia_ressarcivel_mwh: float | None = None
     por_razao: dict[str, float]
     qualidade_dados: QualidadeDadosPerda
     metadata: MetaOut

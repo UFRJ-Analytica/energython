@@ -29,7 +29,7 @@ export function PlantMap({ usinas }: Props) {
   }, [points])
 
   const maxCurtailment = useMemo(
-    () => Math.max(...points.map((p) => Number(p.total_perda_reais || 0)), 1),
+    () => Math.max(...points.map((p) => Number(p.total_corte_mwh || 0)), 1),
     [points],
   )
 
@@ -60,7 +60,7 @@ export function PlantMap({ usinas }: Props) {
                 <CircleMarker
                   key={u.usina_id}
                   center={[u.latitude, u.longitude]}
-                  radius={6 + 10 * Math.sqrt(Number(u.total_perda_reais || 0) / maxCurtailment)}
+                  radius={6 + 10 * Math.sqrt(Number(u.total_corte_mwh || 0) / maxCurtailment)}
                   pathOptions={{
                     color: "#ffffff",
                     weight: 1,
@@ -71,17 +71,24 @@ export function PlantMap({ usinas }: Props) {
                   <Popup>
                     <div className="space-y-1 text-xs">
                       <div className="font-semibold">{u.nome}</div>
+                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Usina individual</div>
                       <div>ID ONS: {u.id_ons ?? "—"}</div>
                       {u.ceg && <div>CEG: {u.ceg}</div>}
                       <div>Fonte: {u.fonte}</div>
-                      <div>Capacidade/conjunto: {u.potencia_mw.toFixed(2)} MW</div>
+                      <div>Capacidade da usina: {u.potencia_mw.toFixed(2)} MW</div>
+                      {u.nom_conjuntousina && <div>Conjunto regulatório: {u.nom_conjuntousina}</div>}
                       {typeof u.total_perda_reais === "number" && (
                         <div>Perda financeira: {u.total_perda_reais.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}</div>
+                      )}
+                      {typeof u.total_perda_ressarcivel_reais === "number" && (
+                        <div>Perda ressarcível: {u.total_perda_ressarcivel_reais.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}</div>
                       )}
                       {typeof u.total_corte_mwh === "number" && (
                         <div>Perda energética: {u.total_corte_mwh.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} MWh</div>
                       )}
-                      {u.nom_conjuntousina && <div>Conjunto: {u.nom_conjuntousina}</div>}
+                      {typeof u.total_ressarcivel_mwh === "number" && (
+                        <div>Energia ressarcível: {u.total_ressarcivel_mwh.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} MWh</div>
+                      )}
                       <div>Submercado: {u.submercado}</div>
                       <div>
                         Lat/Lon: {u.latitude.toFixed(4)}, {u.longitude.toFixed(4)}
@@ -101,7 +108,7 @@ export function PlantMap({ usinas }: Props) {
           </div>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          Arraste para navegar e use zoom (+/- ou scroll) para explorar as usinas.
+          Cada marcador representa uma usina individual; o conjunto ONS aparece apenas como metadado regulatório. O tamanho do marcador segue a energia cortada (MWh), não o PLD.
         </p>
       </CardContent>
     </Card>

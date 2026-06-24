@@ -103,6 +103,9 @@ class FinanceiroService:
         serie = []
         por_razao: dict[str, float] = {}
         total_perda = 0.0
+        total_perda_ressarcivel = 0.0
+        total_energia_ressarcivel = 0.0
+        intervalos_com_ressarcivel_oficial = 0
         total_energia = 0.0
         pld_faltante_intervalos = 0
         referencia_oficial_intervalos = 0
@@ -121,9 +124,20 @@ class FinanceiroService:
                 pld_faltante_intervalos += 1
                 preco = 0.0
             perda = energia * preco
+            energia_ressarcivel_oficial = e.energia_ressarcivel_mwh
+            if energia_ressarcivel_oficial is not None:
+                intervalos_com_ressarcivel_oficial += 1
+                energia_ressarcivel = max(float(energia_ressarcivel_oficial or 0.0), 0.0)
+            else:
+                energia_ressarcivel = 0.0
             razao = self._fallback_razao(e)
+            if energia_ressarcivel_oficial is None and self.policy.is_elegivel(razao):
+                energia_ressarcivel = energia
+            perda_ressarcivel = energia_ressarcivel * preco
             total_perda += perda
+            total_perda_ressarcivel += perda_ressarcivel
             total_energia += energia
+            total_energia_ressarcivel += energia_ressarcivel
             referencia_oficial = bool(e.referencia_oficial)
             if referencia_oficial:
                 referencia_oficial_intervalos += 1
@@ -146,6 +160,7 @@ class FinanceiroService:
                     "razao_restricao": e.razao_restricao,
                     "origem_restricao": e.origem_restricao,
                     "submercado": e.submercado or usina.get("submercado"),
+                    "energia_ressarcivel_mwh": energia_ressarcivel,
                 }
             )
             serie.append(
@@ -154,6 +169,8 @@ class FinanceiroService:
                     "energia_restringida_mwh": round(energia, 4),
                     "pld_reais_mwh": round(preco, 4),
                     "perda_reais": round(perda, 2),
+                    "energia_ressarcivel_mwh": round(energia_ressarcivel, 4),
+                    "perda_ressarcivel_reais": round(perda_ressarcivel, 2),
                     "razao_restricao": razao,
                     "cod_razaorestricao": e.cod_razaorestricao,
                     "cod_origemrestricao": e.cod_origemrestricao,
@@ -210,7 +227,9 @@ class FinanceiroService:
             total_intervalos_restricao=len(eventos),
             total_eventos_curtailment=total_eventos_curtailment,
             total_perda_reais=round(total_perda, 2),
+            total_perda_ressarcivel_reais=round(total_perda_ressarcivel, 2),
             total_energia_mwh=round(total_energia, 4),
+            total_energia_ressarcivel_mwh=round(total_energia_ressarcivel, 4),
             pld_faltante_intervalos=pld_faltante_intervalos,
             qualidade_status=status,
         )
@@ -219,6 +238,8 @@ class FinanceiroService:
             "usina_id": usina_id,
             "total_perda_reais": round(total_perda, 2),
             "total_energia_restringida_mwh": round(total_energia, 4),
+            "total_perda_ressarcivel_reais": round(total_perda_ressarcivel, 2),
+            "total_energia_ressarcivel_mwh": round(total_energia_ressarcivel, 4),
             "por_razao": {k: round(v, 2) for k, v in por_razao.items()},
             "qualidade_dados": {
                 "status": status,
@@ -231,6 +252,7 @@ class FinanceiroService:
                 "energia_unidade_validada": COFF_ENERGY_UNIT_VALIDATED,
                 "referencia_oficial_intervalos": referencia_oficial_intervalos,
                 "referencia_estimativa_intervalos": referencia_estimativa_intervalos,
+                "ressarcivel_oficial_intervalos": intervalos_com_ressarcivel_oficial,
             },
             "metadata": {
                 "mvp_scope_applied": True,

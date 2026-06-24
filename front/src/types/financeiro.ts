@@ -9,6 +9,7 @@ export interface QualidadeDados {
   energia_unidade_validada?: boolean
   referencia_oficial_intervalos?: number
   referencia_estimativa_intervalos?: number
+  ressarcivel_oficial_intervalos?: number
 }
 
 export interface SeriePerdaItem {
@@ -16,6 +17,8 @@ export interface SeriePerdaItem {
   energia_restringida_mwh: number
   pld_reais_mwh: number
   perda_reais: number
+  energia_ressarcivel_mwh?: number | null
+  perda_ressarcivel_reais?: number | null
   razao_restricao: string
   cod_razaorestricao?: string | null
   cod_origemrestricao?: string | null
@@ -49,6 +52,8 @@ export interface PerdaOut {
   usina_id: string
   total_perda_reais: number
   total_energia_restringida_mwh: number
+  total_perda_ressarcivel_reais?: number | null
+  total_energia_ressarcivel_mwh?: number | null
   por_razao: Record<string, number>
   qualidade_dados: QualidadeDados
   eventos?: EventoCurtailmentItem[]

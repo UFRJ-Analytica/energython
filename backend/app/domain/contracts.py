@@ -9,6 +9,7 @@ from typing import Any
 class ConstrainedOffEvent:
     timestamp: datetime
     energia_restringida_mwh: float
+    energia_ressarcivel_mwh: float | None
     razao_restricao: str | None
     cod_razaorestricao: str | None
     cod_origemrestricao: str | None = None
@@ -84,6 +85,7 @@ def parse_constrained_off(items: list[dict[str, Any]]) -> list[ConstrainedOffEve
             ConstrainedOffEvent(
                 timestamp=_as_datetime(e.get("timestamp")),
                 energia_restringida_mwh=_as_float(e.get("energia_restringida_mwh")),
+                energia_ressarcivel_mwh=_as_float(e.get("energia_ressarcivel_mwh")) if e.get("energia_ressarcivel_mwh") is not None else None,
                 razao_restricao=e.get("razao_restricao"),
                 cod_razaorestricao=e.get("cod_razaorestricao"),
                 cod_origemrestricao=e.get("cod_origemrestricao") or e.get("origem_restricao"),

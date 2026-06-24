@@ -41,6 +41,11 @@ export function PlantMap({ usinas }: Props) {
     return [lat, lon]
   }, [points])
 
+  const maxCurtailment = useMemo(
+    () => Math.max(...points.map((p) => Number(p.total_corte_mwh || 0)), 1),
+    [points],
+  )
+
   if (!points.length) {
     return (
       <Card>
@@ -78,7 +83,7 @@ export function PlantMap({ usinas }: Props) {
               <CircleMarker
                 key={u.usina_id}
                 center={[u.latitude, u.longitude]}
-                radius={6}
+                radius={6 + 10 * Math.sqrt(Number(u.total_corte_mwh || 0) / maxCurtailment)}
                 pathOptions={{
                   color: "#ffffff",
                   weight: 1,
@@ -89,9 +94,18 @@ export function PlantMap({ usinas }: Props) {
                 <Popup>
                   <div className="space-y-1 text-xs">
                     <div className="font-semibold">{u.nome}</div>
-                    <div>ID: {u.usina_id}</div>
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Usina individual</div>
+                    <div>ID ONS: {u.id_ons ?? u.usina_id}</div>
+                    {u.ceg && <div>CEG: {u.ceg}</div>}
                     <div>Fonte: {u.fonte}</div>
-                    <div>Capacidade: {u.potencia_mw.toFixed(2)} MW</div>
+                    <div>Capacidade da usina: {u.potencia_mw.toFixed(2)} MW</div>
+                    {u.nom_conjuntousina && <div>Conjunto regulatório: {u.nom_conjuntousina}</div>}
+                    {typeof u.total_corte_mwh === "number" && (
+                      <div>Perda energética: {u.total_corte_mwh.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} MWh</div>
+                    )}
+                    {typeof u.total_ressarcivel_mwh === "number" && (
+                      <div>Energia ressarcível: {u.total_ressarcivel_mwh.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} MWh</div>
+                    )}
                     <div>Submercado: {u.submercado}</div>
                     <div>
                       Lat/Lon: {u.latitude.toFixed(4)}, {u.longitude.toFixed(4)}
@@ -110,7 +124,7 @@ export function PlantMap({ usinas }: Props) {
           </MapContainer>
         </div>
         <p className="text-xs text-muted-foreground">
-          {points.length} usinas com coordenadas nesta página. Clique no marcador para abrir detalhes e selecionar.
+          {points.length} usinas individuais com coordenadas nesta página. O conjunto ONS aparece apenas como metadado regulatório; o tamanho do marcador segue a energia cortada (MWh).
         </p>
       </CardContent>
     </Card>

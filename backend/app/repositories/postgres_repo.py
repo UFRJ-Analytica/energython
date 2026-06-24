@@ -97,8 +97,12 @@ class PostgresRepository(BaseRepository):
         ), eventos AS (
             SELECT 'dw.mart_restricao_solar'::text AS mart_table, nom_usina, id_ons, ceg, fonte,
                    id_estado, nom_estado, id_subsistema, nom_subsistema,
-                   nom_conjuntousina, nom_usina_conjunto, potencia_mw, potencia_mw_conjunto,
-                   din_instante, COALESCE(corte_mwh, 0)::double precision AS corte_mwh
+                   nom_conjuntousina, nom_usina_conjunto,
+                   NULL::double precision AS potencia_mw,
+                   potencia_mw_conjunto,
+                   din_instante,
+                   COALESCE(corte_mwh, 0)::double precision AS corte_mwh,
+                   COALESCE(corte_ressarcivel_mwh, 0)::double precision AS corte_ressarcivel_mwh
             FROM dw.mart_restricao_solar_2026, limites
             WHERE COALESCE(corte_mwh, 0) > 0
               AND din_instante >= limites.max_dt - interval '2 months'
@@ -106,18 +110,29 @@ class PostgresRepository(BaseRepository):
             UNION ALL
             SELECT 'dw.mart_restricao_eolica'::text AS mart_table, nom_usina, id_ons, ceg, fonte,
                    id_estado, nom_estado, id_subsistema, nom_subsistema,
-                   nom_conjuntousina, nom_usina_conjunto, potencia_mw, potencia_mw_conjunto,
-                   din_instante, COALESCE(corte_mwh, 0)::double precision AS corte_mwh
+                   nom_conjuntousina, nom_usina_conjunto,
+                   NULL::double precision AS potencia_mw,
+                   potencia_mw_conjunto,
+                   din_instante,
+                   COALESCE(corte_mwh, 0)::double precision AS corte_mwh,
+                   COALESCE(corte_ressarcivel_mwh, 0)::double precision AS corte_ressarcivel_mwh
             FROM dw.mart_restricao_eolica_2026, limites
             WHERE COALESCE(corte_mwh, 0) > 0
               AND din_instante >= limites.max_dt - interval '2 months'
               AND din_instante <= limites.max_dt
         ), pld AS (
             SELECT
-                to_timestamp(mes_referencia || LPAD(dia, 2, '0') || LPAD(hora, 2, '0'), 'YYYYMMDDHH24') AS timestamp,
-                NULLIF(REPLACE(pld_hora, ',', '.'), '')::double precision AS pld_reais_mwh
-            FROM public.ccee_pld_horario
-            WHERE UPPER(submercado) = 'NORDESTE'
+                timestamp,
+                AVG(pld_reais_mwh)::double precision AS pld_reais_mwh
+            FROM (
+                SELECT
+                    to_timestamp(mes_referencia || LPAD(dia, 2, '0') || LPAD(hora, 2, '0'), 'YYYYMMDDHH24') AS timestamp,
+                    NULLIF(REPLACE(pld_hora, ',', '.'), '')::double precision AS pld_reais_mwh
+                FROM public.ccee_pld_horario
+                WHERE UPPER(submercado) = 'NORDESTE'
+            ) pld_raw
+            WHERE pld_reais_mwh IS NOT NULL
+            GROUP BY timestamp
         ), mart AS (
             SELECT e.mart_table, e.nom_usina, e.id_ons, e.ceg, e.fonte,
                    e.id_estado, e.nom_estado, e.id_subsistema, e.nom_subsistema,
@@ -127,7 +142,9 @@ class PostgresRepository(BaseRepository):
                    MIN(e.din_instante) AS data_inicio,
                    MAX(e.din_instante) AS data_fim,
                    SUM(e.corte_mwh)::double precision AS total_corte_mwh,
+                   SUM(e.corte_ressarcivel_mwh)::double precision AS total_ressarcivel_mwh,
                    SUM(e.corte_mwh * COALESCE(pld.pld_reais_mwh, 0))::double precision AS total_perda_reais,
+                   SUM(e.corte_ressarcivel_mwh * COALESCE(pld.pld_reais_mwh, 0))::double precision AS total_perda_ressarcivel_reais,
                    SUM(CASE WHEN pld.pld_reais_mwh IS NULL THEN 1 ELSE 0 END)::bigint AS pld_faltante_intervalos,
                    COUNT(*)::bigint AS total_intervalos_restricao
             FROM eventos e
@@ -140,20 +157,21 @@ class PostgresRepository(BaseRepository):
                    {self._submercado_expr('mart')} AS submercado
             FROM mart
             WHERE (:ne_only = false OR UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') OR {self._submercado_expr('mart')} = 'NE')
-              AND COALESCE(total_perda_reais, 0) > 0
+              AND COALESCE(total_corte_mwh, 0) > 0
         )
         SELECT r.mart_table, r.nom_usina, r.id_ons, r.ceg, r.fonte, r.id_estado, r.nom_estado,
                r.id_subsistema, r.nom_subsistema, r.nom_conjuntousina, r.nom_usina_conjunto,
-               COALESCE(r.potencia_mw, p.potencia_mw, r.potencia_mw_conjunto) AS potencia_mw, r.data_inicio, r.data_fim, r.total_corte_mwh,
-               r.total_perda_reais, r.total_intervalos_restricao, r.submercado,
+               COALESCE(p.potencia_mw, r.potencia_mw, 0) AS potencia_mw, r.data_inicio, r.data_fim, r.total_corte_mwh,
+               r.total_ressarcivel_mwh, r.total_perda_reais, r.total_perda_ressarcivel_reais,
+               r.pld_faltante_intervalos, r.total_intervalos_restricao, r.submercado,
                u.lat AS latitude, u.lon AS longitude
         FROM ranked r
         LEFT JOIN dw.dim_usina u ON u.ceg_core = r.ceg_core
         LEFT JOIN dw.dim_usina_potencia p
           ON p.nom_usina = r.nom_usina
          AND p.id_estado = r.id_estado
-        ORDER BY r.total_perda_reais DESC NULLS LAST, r.total_corte_mwh DESC NULLS LAST, r.fonte, r.id_estado, r.nom_usina
-        LIMIT 50
+        ORDER BY r.total_corte_mwh DESC NULLS LAST, r.total_perda_reais DESC NULLS LAST, r.fonte, r.id_estado, r.nom_usina
+        LIMIT 200
         """
         rows = self._safe_mappings_query(sql, {"ne_only": self.mvp_only_nordeste})
         if rows:
@@ -186,7 +204,10 @@ class PostgresRepository(BaseRepository):
             "data_inicio": row.get("data_inicio").isoformat() if hasattr(row.get("data_inicio"), "isoformat") else row.get("data_inicio"),
             "data_fim": row.get("data_fim").isoformat() if hasattr(row.get("data_fim"), "isoformat") else row.get("data_fim"),
             "total_corte_mwh": round(float(row.get("total_corte_mwh") or 0.0), 3),
+            "total_ressarcivel_mwh": round(float(row.get("total_ressarcivel_mwh") or 0.0), 3),
             "total_perda_reais": round(float(row.get("total_perda_reais") or 0.0), 2),
+            "total_perda_ressarcivel_reais": round(float(row.get("total_perda_ressarcivel_reais") or 0.0), 2),
+            "pld_faltante_intervalos": int(row.get("pld_faltante_intervalos") or 0),
             "total_intervalos_restricao": int(row.get("total_intervalos_restricao") or 0),
             "nivel_granularidade": "usina_individual_mart_restricao_dw",
         }
@@ -337,6 +358,7 @@ class PostgresRepository(BaseRepository):
                     COALESCE(m.val_geracaoverificada, 0)::double precision * 0.5 AS geracao_verificada_mwh,
                     COALESCE(m.val_geracaoestimada, m.val_geracaoreferenciafinal_conjunto, m.val_geracaoreferencia_conjunto, 0)::double precision * 0.5 AS geracao_referencia_mwh,
                     COALESCE(m.corte_mwh, GREATEST(COALESCE(m.val_geracaoreferenciafinal_conjunto, m.val_geracaoreferencia_conjunto, 0)::double precision - COALESCE(m.val_geracaoverificada, 0)::double precision, 0) * 0.5)::double precision AS energia_restringida_mwh,
+                    COALESCE(m.corte_ressarcivel_mwh, 0)::double precision AS energia_ressarcivel_mwh,
                     (m.val_geracaoreferenciafinal_conjunto IS NOT NULL OR m.corte_mwh IS NOT NULL) AS referencia_oficial,
                     'mart_restricao_por_usina_com_razao_do_conjunto'::text AS referencia_calculo_curtailment,
                     m.val_corte_mwmed::double precision AS geracao_limitada_mwmed,
@@ -534,6 +556,31 @@ class PostgresRepository(BaseRepository):
             "S": "SUL",
         }.get(submercado_norm, submercado_norm)
 
+        # Prefer the curated public CCEE table for MVP windows: in the current
+        # database it has 2026-05 coverage, while stg_ccee stops in 2026-04.
+        sql_public = """
+        WITH pld_norm AS (
+            SELECT
+                to_timestamp(mes_referencia || LPAD(dia, 2, '0') || LPAD(hora, 2, '0'), 'YYYYMMDDHH24') AS timestamp,
+                UPPER(submercado) AS submercado,
+                NULLIF(REPLACE(pld_hora, ',', '.'), '')::double precision AS pld_reais_mwh
+            FROM public.ccee_pld_horario
+            WHERE UPPER(submercado) = :submercado_public
+        )
+        SELECT timestamp, submercado, AVG(pld_reais_mwh)::double precision AS pld_reais_mwh
+        FROM pld_norm
+        WHERE timestamp BETWEEN :inicio AND :fim
+          AND pld_reais_mwh IS NOT NULL
+        GROUP BY timestamp, submercado
+        ORDER BY timestamp
+        """
+        rows_public = self._safe_mappings_query(
+            sql_public,
+            {"submercado_public": submercado_public, "inicio": inicio, "fim": fim},
+        )
+        if rows_public:
+            return rows_public
+
         sql_stg = """
         WITH pld_norm AS (
             SELECT
@@ -545,10 +592,11 @@ class PostgresRepository(BaseRepository):
             WHERE UPPER(submercado) = :submercado_public
               AND NULLIF(periodo_comercializacao, '') ~ '^[0-9]+$'
         )
-        SELECT timestamp, submercado, pld_reais_mwh
+        SELECT timestamp, submercado, AVG(pld_reais_mwh)::double precision AS pld_reais_mwh
         FROM pld_norm
         WHERE timestamp BETWEEN :inicio AND :fim
           AND pld_reais_mwh IS NOT NULL
+        GROUP BY timestamp, submercado
         ORDER BY timestamp
         """
         rows_stg = self._safe_mappings_query(
@@ -558,25 +606,7 @@ class PostgresRepository(BaseRepository):
         if rows_stg:
             return rows_stg
 
-        sql_public = """
-        WITH pld_norm AS (
-            SELECT
-                to_timestamp(mes_referencia || LPAD(dia, 2, '0') || LPAD(hora, 2, '0'), 'YYYYMMDDHH24') AS timestamp,
-                UPPER(submercado) AS submercado,
-                NULLIF(REPLACE(pld_hora, ',', '.'), '')::double precision AS pld_reais_mwh
-            FROM public.ccee_pld_horario
-            WHERE UPPER(submercado) = :submercado_public
-        )
-        SELECT timestamp, submercado, pld_reais_mwh
-        FROM pld_norm
-        WHERE timestamp BETWEEN :inicio AND :fim
-          AND pld_reais_mwh IS NOT NULL
-        ORDER BY timestamp
-        """
-        return self._safe_mappings_query(
-            sql_public,
-            {"submercado_public": submercado_public, "inicio": inicio, "fim": fim},
-        )
+        return []
 
     def get_geracao_horaria(self, usina_id: str, inicio: datetime, fim: datetime):
         self._validate_range(inicio, fim)
@@ -800,10 +830,17 @@ class PostgresRepository(BaseRepository):
                 ),
                 pld AS (
                     SELECT
-                        to_timestamp(mes_referencia || LPAD(dia, 2, '0') || LPAD(hora, 2, '0'), 'YYYYMMDDHH24') AS timestamp,
-                        NULLIF(REPLACE(pld_hora, ',', '.'), '')::double precision AS pld_reais_mwh
-                    FROM public.ccee_pld_horario
-                    WHERE UPPER(submercado) = :submercado_public
+                        timestamp,
+                        AVG(pld_reais_mwh)::double precision AS pld_reais_mwh
+                    FROM (
+                        SELECT
+                            to_timestamp(mes_referencia || LPAD(dia, 2, '0') || LPAD(hora, 2, '0'), 'YYYYMMDDHH24') AS timestamp,
+                            NULLIF(REPLACE(pld_hora, ',', '.'), '')::double precision AS pld_reais_mwh
+                        FROM public.ccee_pld_horario
+                        WHERE UPPER(submercado) = :submercado_public
+                    ) pld_raw
+                    WHERE pld_reais_mwh IS NOT NULL
+                    GROUP BY timestamp
                 )
                 SELECT
                     co.razao_norm AS razao,
@@ -897,10 +934,17 @@ class PostgresRepository(BaseRepository):
         ),
         pld AS (
             SELECT
-                to_timestamp(mes_referencia || LPAD(dia, 2, '0') || LPAD(hora, 2, '0'), 'YYYYMMDDHH24') AS timestamp,
-                NULLIF(REPLACE(pld_hora, ',', '.'), '')::double precision AS pld_reais_mwh
-            FROM public.ccee_pld_horario
-            WHERE UPPER(submercado) = :submercado_public
+                timestamp,
+                AVG(pld_reais_mwh)::double precision AS pld_reais_mwh
+            FROM (
+                SELECT
+                    to_timestamp(mes_referencia || LPAD(dia, 2, '0') || LPAD(hora, 2, '0'), 'YYYYMMDDHH24') AS timestamp,
+                    NULLIF(REPLACE(pld_hora, ',', '.'), '')::double precision AS pld_reais_mwh
+                FROM public.ccee_pld_horario
+                WHERE UPPER(submercado) = :submercado_public
+            ) pld_raw
+            WHERE pld_reais_mwh IS NOT NULL
+            GROUP BY timestamp
         )
         SELECT
             co.razao_norm AS razao,

@@ -4,9 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DateRangePicker } from "@/components/shared/DateRangePicker"
 import { ErrorState } from "@/components/shared/ErrorState"
-import { FinancialLossDailyLineChart } from "@/components/charts/FinancialLossDailyLineChart"
 import { usePlantDateRange } from "@/hooks/usePlantDateRange"
-import { usePerda } from "@/hooks/useFinanceiro"
 import { useUsina, useUsinaResumo } from "@/hooks/useUsinas"
 import { useCountUp } from "@/hooks/useCountUp"
 import { fmtBRL, fmtMWh, fmtPct, fmtNum } from "@/lib/formatters"
@@ -31,7 +29,6 @@ export default function Resumo() {
   const dateRange = usePlantDateRange(usina.data?.data_fim)
 
   const { data, isLoading, error } = useUsinaResumo(id!, dateRange.inicio, dateRange.fim, dateRange.ready)
-  const perda = usePerda(id!, dateRange.inicio, dateRange.fim, dateRange.ready)
   const pldMedioReaisMwh = data && Number(data.total_corte_mwh || 0) > 0
     ? Number(data.total_perda_reais || 0) / Number(data.total_corte_mwh || 0)
     : 0
@@ -131,23 +128,6 @@ export default function Resumo() {
                 Simular BESS <ArrowRight className="h-3 w-3" />
               </Button>
             </div>
-          </div>
-
-          <div className="overflow-hidden rounded-2xl border border-rose-500/20 bg-card/80 p-5 shadow-[0_18px_70px_rgba(15,23,42,0.22)]">
-            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Perda financeira diária</p>
-                <p className="text-xs text-muted-foreground">Linha diária agregada do período selecionado</p>
-              </div>
-              <p className="text-xs font-medium uppercase tracking-widest text-rose-300/80">R$/dia</p>
-            </div>
-            {perda.isLoading ? (
-              <Skeleton className="h-80 w-full" />
-            ) : perda.data?.serie?.length ? (
-              <FinancialLossDailyLineChart serie={perda.data.serie} />
-            ) : (
-              <p className="text-sm text-muted-foreground">Sem perda financeira de curtailment para plotar no período.</p>
-            )}
           </div>
 
           {/* Contexto secundário */}

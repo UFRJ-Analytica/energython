@@ -154,24 +154,51 @@ class PostgresRepository(BaseRepository):
         ), ranked AS (
             SELECT mart.*,
                    REGEXP_REPLACE(ceg, '\\.\\d+$', '') AS ceg_core,
-                   {self._submercado_expr('mart')} AS submercado
+                   {self._submercado_expr('mart')} AS submercado,
+                   CASE
+                       WHEN COALESCE(total_corte_mwh, 0) > 0
+                       THEN COALESCE(total_ressarcivel_mwh, 0)::double precision / total_corte_mwh::double precision
+                       ELSE 0::double precision
+                   END AS percentual_ressarcivel,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY CASE
+                           WHEN UPPER(COALESCE(fonte, '')) LIKE '%EOL%' THEN 'eolica'
+                           WHEN UPPER(COALESCE(fonte, '')) LIKE '%FOTO%' OR UPPER(COALESCE(fonte, '')) LIKE '%SOLAR%' THEN 'solar'
+                           ELSE LOWER(COALESCE(fonte, ''))
+                       END
+                       ORDER BY total_corte_mwh DESC NULLS LAST, total_perda_reais DESC NULLS LAST, id_estado, nom_usina
+                   ) AS fonte_rank
             FROM mart
             WHERE (:ne_only = false OR UPPER(COALESCE(id_estado, '')) IN ('MA','PI','CE','RN','PB','PE','AL','SE','BA') OR {self._submercado_expr('mart')} = 'NE')
               AND COALESCE(total_corte_mwh, 0) > 0
+              AND COALESCE(total_ressarcivel_mwh, 0)::double precision / NULLIF(total_corte_mwh::double precision, 0) >= 0.10
+        ), aneel_capacidade AS (
+            SELECT
+                REGEXP_REPLACE(codceg, '\\.\\d+$', '') AS ceg_core,
+                MAX(COALESCE(
+                    mdapotenciafiscalizadakw::double precision,
+                    NULLIF(REPLACE(mdapotenciaoutorgadakw, ',', '.'), '')::double precision
+                ) / 1000.0)::double precision AS potencia_mw
+            FROM public.aneel_siga
+            WHERE codceg IS NOT NULL
+            GROUP BY REGEXP_REPLACE(codceg, '\\.\\d+$', '')
         )
         SELECT r.mart_table, r.nom_usina, r.id_ons, r.ceg, r.fonte, r.id_estado, r.nom_estado,
                r.id_subsistema, r.nom_subsistema, r.nom_conjuntousina, r.nom_usina_conjunto,
-               COALESCE(p.potencia_mw, r.potencia_mw, 0) AS potencia_mw, r.data_inicio, r.data_fim, r.total_corte_mwh,
+               COALESCE(a.potencia_mw, p.potencia_mw, r.potencia_mw, 0) AS potencia_mw, r.data_inicio, r.data_fim, r.total_corte_mwh,
                r.total_ressarcivel_mwh, r.total_perda_reais, r.total_perda_ressarcivel_reais,
+               r.percentual_ressarcivel, r.fonte_rank,
                r.pld_faltante_intervalos, r.total_intervalos_restricao, r.submercado,
                u.lat AS latitude, u.lon AS longitude
         FROM ranked r
         LEFT JOIN dw.dim_usina u ON u.ceg_core = r.ceg_core
+        LEFT JOIN aneel_capacidade a ON a.ceg_core = r.ceg_core
         LEFT JOIN dw.dim_usina_potencia p
           ON p.nom_usina = r.nom_usina
          AND p.id_estado = r.id_estado
+        WHERE r.fonte_rank <= 30
         ORDER BY r.total_corte_mwh DESC NULLS LAST, r.total_perda_reais DESC NULLS LAST, r.fonte, r.id_estado, r.nom_usina
-        LIMIT 200
+        LIMIT 60
         """
         rows = self._safe_mappings_query(sql, {"ne_only": self.mvp_only_nordeste})
         if rows:
@@ -207,6 +234,8 @@ class PostgresRepository(BaseRepository):
             "total_ressarcivel_mwh": round(float(row.get("total_ressarcivel_mwh") or 0.0), 3),
             "total_perda_reais": round(float(row.get("total_perda_reais") or 0.0), 2),
             "total_perda_ressarcivel_reais": round(float(row.get("total_perda_ressarcivel_reais") or 0.0), 2),
+            "percentual_ressarcivel": round(float(row.get("percentual_ressarcivel") or 0.0) * 100.0, 2),
+            "fonte_rank": int(row.get("fonte_rank") or 0),
             "pld_faltante_intervalos": int(row.get("pld_faltante_intervalos") or 0),
             "total_intervalos_restricao": int(row.get("total_intervalos_restricao") or 0),
             "nivel_granularidade": "usina_individual_mart_restricao_dw",

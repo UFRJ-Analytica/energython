@@ -14,6 +14,8 @@ export interface UsinaOut {
   total_ressarcivel_mwh?: number | null
   total_perda_reais?: number | null
   total_perda_ressarcivel_reais?: number | null
+  percentual_ressarcivel?: number | null
+  fonte_rank?: number | null
   pld_faltante_intervalos?: number | null
   total_intervalos_restricao?: number | null
   data_inicio?: string | null

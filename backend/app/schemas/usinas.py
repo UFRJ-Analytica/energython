@@ -19,6 +19,8 @@ class UsinaOut(BaseModel):
     total_ressarcivel_mwh: float | None = None
     total_perda_reais: float | None = None
     total_perda_ressarcivel_reais: float | None = None
+    percentual_ressarcivel: float | None = None
+    fonte_rank: int | None = None
     pld_faltante_intervalos: int | None = None
     total_intervalos_restricao: int | None = None
     data_inicio: str | None = None

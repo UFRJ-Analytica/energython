@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom"
 import {
   ArrowRight,
   BarChart3,
@@ -105,13 +105,6 @@ const TECH_FACTS = [
 ]
 
 export default function Home() {
-  const navigate = useNavigate()
-
-  const openDebug = () => {
-    sessionStorage.setItem("energython.debugAccess", "true")
-    navigate("/debug")
-  }
-
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#05070b] text-white">
       {/* Background blobs */}
@@ -165,14 +158,6 @@ export default function Home() {
                   Ver usinas
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-12 rounded-full border-white/20 bg-white/[0.04] px-6 text-sm font-semibold text-white transition hover:bg-white/10"
-                onClick={openDebug}
-              >
-                DEBUG
               </Button>
             </div>
           </div>

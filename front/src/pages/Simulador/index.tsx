@@ -1,14 +1,13 @@
-import { useCallback, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useParams } from "react-router-dom"
 import { Zap } from "lucide-react"
 import { Slider } from "@/components/ui/slider"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { BessCurtailmentBatteryChart } from "@/components/charts/BessCurtailmentBatteryChart"
 import { DateRangePicker } from "@/components/shared/DateRangePicker"
 import { ErrorState } from "@/components/shared/ErrorState"
-import { useBessSimular, usePrevisaoPerdas } from "@/hooks/useFinanceiro"
+import { useBessSimular } from "@/hooks/useFinanceiro"
 import { usePlantDateRange } from "@/hooks/usePlantDateRange"
 import { useUsina, useUsinaResumo } from "@/hooks/useUsinas"
 import { fmtBRL, fmtMWh, fmtPct } from "@/lib/formatters"
@@ -72,10 +71,10 @@ export default function Simulador() {
   const [duracao, setDuracao] = useState(4)
   const [eficiencia, setEficiencia] = useState(85)
   const [capex, setCapex] = useState(120_000_000)
+  const [presetResults, setPresetResults] = useState<(BessOut | null)[]>([null, null])
 
   const main = useBessSimular(id!, dateRange.inicio, dateRange.fim)
   const resumo = useUsinaResumo(id!, dateRange.inicio, dateRange.fim, dateRange.ready)
-  const previsaoPerdas = usePrevisaoPerdas(id!, 720, 720, !!id)
   const preset0 = useBessSimular(id!, dateRange.inicio, dateRange.fim)
   const preset1 = useBessSimular(id!, dateRange.inicio, dateRange.fim)
   const lastPresetKeyRef = useRef<string>("")
@@ -93,10 +92,24 @@ export default function Simulador() {
     preset1.mutate(PRESETS[1])
   }, [dateRange.inicio, dateRange.fim, preset0, preset1])
 
-  const presetResults = useMemo<(BessOut | null)[]>(() => [preset0.data ?? null, preset1.data ?? null], [preset0.data, preset1.data])
+  useEffect(() => {
+    // Não executa simulação principal automaticamente para evitar rajadas de requests.
+    // Usuário dispara manualmente ao clicar em "Simular cenário".
+  }, [potencia, duracao, eficiencia, capex, dateRange.inicio, dateRange.fim])
+
+  useEffect(() => {
+    // Comparação de presets também é manual (botão) para não duplicar chamadas em dev/StrictMode.
+  }, [dateRange.inicio, dateRange.fim])
+
+  useEffect(() => {
+    if (preset0.data) setPresetResults((p) => [preset0.data!, p[1]])
+  }, [preset0.data])
+  useEffect(() => {
+    if (preset1.data) setPresetResults((p) => [p[0], preset1.data!])
+  }, [preset1.data])
 
   return (
-    <div className="container mx-auto max-w-7xl px-6 py-10">
+    <div className="container mx-auto max-w-5xl px-6 py-10">
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-widest text-teal-500">Simulador BESS</p>
@@ -108,18 +121,6 @@ export default function Simulador() {
           minDate={dateRange.minDate}
           maxDate={dateRange.maxDate}
           onChange={dateRange.setRange}
-        />
-      </div>
-
-      <div className="mb-8">
-        <BessCurtailmentBatteryChart
-          serie={previsaoPerdas.data?.serie_previsao ?? []}
-          isLoading={previsaoPerdas.isLoading}
-          potenciaMw={potencia}
-          duracaoHoras={duracao}
-          eficienciaPct={eficiencia}
-          nome={typeof usina.data?.nome === "string" ? usina.data.nome : id}
-          metodo={previsaoPerdas.data?.metodo_previsao}
         />
       </div>
 

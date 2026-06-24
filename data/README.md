@@ -5,13 +5,6 @@
 
 ## 📑 Documentação Disponível
 
-### 0️⃣ **Adaptação Energython DEBUG:** código isolado para front/back
-📁 `energython_debug_adaptation/`
-- Código de referência para backend FastAPI e frontend React.
-- SQLs/aliases para alterar somente a leitura do banco sem renomear variáveis.
-- Tela DEBUG acessível por botão, isolada do fluxo principal.
-- Documentação separada para backend e frontend.
-
 ### 1️⃣ **COMECE AQUI:** Sumário Executivo
 📄 `SUMARIO_EXECUTIVO.md`
 - O que foi feito em 30 segundos
@@ -72,16 +65,6 @@ npm run dev
 
 ### Scripts
 - `etl_unificado.py` — Pipeline completo (execute este)
-
-### Adaptação DEBUG Energython
-- `energython_debug_adaptation/README.md` — visão geral do pacote isolado.
-- `energython_debug_adaptation/TASK_DIAGRAM.md` — diagrama das tarefas em ordem.
-- `energython_debug_adaptation/DATABASE_READING_MAP.md` — contrato atual x novas leituras do banco.
-- `energython_debug_adaptation/BACKEND_DOCUMENTATION.md` — como aplicar no backend.
-- `energython_debug_adaptation/FRONTEND_DOCUMENTATION.md` — como aplicar no frontend.
-- `energython_debug_adaptation/IMPLEMENTATION_APPLIED.md` — registro do que já foi aplicado no projeto real.
-- `energython_debug_adaptation/backend/` — código backend de referência.
-- `energython_debug_adaptation/frontend/` — código frontend/snippets de referência.
 
 ### Documentação
 - `SUMARIO_EXECUTIVO.md` — Overview em 2 minutos

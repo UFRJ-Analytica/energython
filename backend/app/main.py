@@ -6,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import engine
-from app.routers.debug import router as debug_router
 from app.routers.financeiro import router as financeiro_router
 from app.routers.pleito import router as pleito_router
 from app.routers.regulatorio import router as regulatorio_router
@@ -65,7 +64,6 @@ app.include_router(usinas_router)
 app.include_router(financeiro_router)
 app.include_router(regulatorio_router)
 app.include_router(pleito_router)
-app.include_router(debug_router)
 
 
 @app.get("/health")

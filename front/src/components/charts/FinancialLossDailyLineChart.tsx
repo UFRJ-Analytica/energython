@@ -1,5 +1,5 @@
 import { format } from "date-fns"
-import { Area, AreaChart, CartesianGrid, Line, XAxis, YAxis } from "recharts"
+import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 import type { SeriePerdaItem } from "@/types/financeiro"
 import { fmtBRL, fmtMWh } from "@/lib/formatters"
@@ -64,28 +64,23 @@ export function FinancialLossDailyLineChart({ serie }: Props) {
     }))
 
   return (
-    <ChartContainer config={chartConfig} className="h-[340px] w-full aspect-auto rounded-2xl bg-[radial-gradient(circle_at_12%_8%,rgba(251,113,133,0.16),transparent_34%),radial-gradient(circle_at_86%_18%,rgba(249,115,22,0.12),transparent_30%)]">
-      <AreaChart data={data} margin={{ top: 22, right: 18, bottom: 4, left: 2 }}>
+    <ChartContainer config={chartConfig} className="h-[320px] w-full aspect-auto">
+      <LineChart data={data} margin={{ top: 18, right: 18, bottom: 4, left: 2 }}>
         <defs>
           <linearGradient id="loss-line-gradient" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#fb923c" />
-            <stop offset="45%" stopColor="#fb7185" />
-            <stop offset="100%" stopColor="#f43f5e" />
-          </linearGradient>
-          <linearGradient id="loss-area-gradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#fb7185" stopOpacity={0.38} />
-            <stop offset="55%" stopColor="#fb7185" stopOpacity={0.12} />
-            <stop offset="100%" stopColor="#fb7185" stopOpacity={0} />
+            <stop offset="0%" stopColor="#f97316" />
+            <stop offset="55%" stopColor="#fb7185" />
+            <stop offset="100%" stopColor="#ef4444" />
           </linearGradient>
           <filter id="loss-line-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="coloredBlur" />
+            <feGaussianBlur stdDeviation="3" result="coloredBlur" />
             <feMerge>
               <feMergeNode in="coloredBlur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
         </defs>
-        <CartesianGrid vertical={false} strokeDasharray="4 10" stroke="hsl(var(--border))" strokeOpacity={0.32} />
+        <CartesianGrid vertical={false} strokeDasharray="4 6" stroke="hsl(var(--border))" strokeOpacity={0.35} />
         <XAxis
           dataKey="label"
           tickLine={false}
@@ -142,26 +137,17 @@ export function FinancialLossDailyLineChart({ serie }: Props) {
             />
           }
         />
-        <Area
-          type="monotone"
-          dataKey="perda_reais"
-          name="perda_reais"
-          stroke="none"
-          fill="url(#loss-area-gradient)"
-          fillOpacity={1}
-          isAnimationActive
-        />
         <Line
           type="monotone"
           dataKey="perda_reais"
           name="perda_reais"
           stroke="url(#loss-line-gradient)"
-          strokeWidth={4}
+          strokeWidth={3.5}
           dot={false}
-          activeDot={{ r: 6, strokeWidth: 2, stroke: "#fff", fill: "#fb7185" }}
+          activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff", fill: "#fb7185" }}
           filter="url(#loss-line-glow)"
         />
-      </AreaChart>
+      </LineChart>
     </ChartContainer>
   )
 }

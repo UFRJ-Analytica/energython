@@ -89,31 +89,6 @@ export interface BessOut {
     energia_perdida_prevista_mwh: number
     energia_recuperavel_prevista_mwh: number
     perda_financeira_evitavel_prevista_reais: number
-    metadados_previsao?: Record<string, unknown>
   }
-}
-
-export interface PrevisaoPerdasSerieItem {
-  timestamp: string
-  energia_mwh: number
-  pld_reais_mwh: number
-  perda_reais: number
-  tipo_dado: "historico" | "previsao"
-  prob_corte?: number
-}
-
-export interface PrevisaoPerdasOut {
-  usina_id: string
-  metodo_previsao: string
-  horizonte_horas: number
-  historico_horas: number
-  resumo: {
-    perda_historica_reais: number
-    perda_prevista_reais: number
-    energia_historica_mwh: number
-    energia_prevista_mwh: number
-  }
-  serie_historico: PrevisaoPerdasSerieItem[]
-  serie_previsao: PrevisaoPerdasSerieItem[]
 }
 
